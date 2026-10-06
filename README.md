@@ -387,9 +387,40 @@ Diferencias **intencionales** con el ERP:
 Se mantiene del ERP: la observación completa va a `DocumentosClienteObservaciones` solo en el alta (la modificación actualiza la
 de la cabecera, truncada a 50); clientes de categorías de IVA sin letra configurada no pueden tener presupuestos (400 con mensaje claro).
 
+### Planillas de caja (`/api/CajaPlanilla`)
+
+Port de `FrmPlanillasCajaABM`. En uso diario: cada cajero abre una planilla a la mañana y la cierra a la noche (≈1.300 planillas;
+todos los comprobantes de venta y recibos exigen una planilla abierta del usuario).
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET mias` | Planillas de las sucursales que opera el usuario (`UsuariosSucursales`), más nuevas primero. |
+| `GET {id}/resumen` | Planilla con ingresos (Σ Debe) y egresos (Σ Haber) de `CajasPlanillasDetalle`, saldo = inicial + ingresos − egresos − rendido, y si el usuario puede cerrarla. |
+| `GET nueva?idUsuario=` | Saldo inicial sugerido (diferencia de la última planilla del usuario), puntos de venta habilitados y si ya tiene una abierta. |
+| `POST abrir` | `{ puntoVenta, idUsuario?, saldoInicial? }`. 409 si el usuario ya tiene una planilla abierta. |
+| `PUT {id}` | `{ saldoInicial, totalRendido, cerrar }`: recalcula totales y diferencia y, con `cerrar: true`, la cierra. 409 si ya está cerrada. |
+
+Permisos como el ERP: sin rol CEO/CTO solo se abre la caja propia y con el punto de venta de la sucursal del usuario; CEO/CTO
+eligen usuario y punto de venta. Cerrar una planilla abierta **otro día** solo lo puede hacer un ADMINISTRADOR (en el ERP el combo
+de estado quedaba deshabilitado).
+
+Diferencias **intencionales** con el ERP:
+- **Ingresos, egresos y diferencia los calcula el servidor** con el detalle de la planilla (el ERP guardaba lo que mandaba la pantalla:
+  en 20 planillas los ingresos grabados no coinciden con el detalle). La pantalla del ERP casi nunca calculaba la diferencia
+  (queda en 0 en todas las planillas cerradas), así que el saldo inicial sugerido era siempre 0.
+- En el alta, el ERP convertía la diferencia a `Integer` (perdía los centavos); acá es decimal.
+- "Ya tiene una caja abierta" mira cualquier planilla abierta del usuario (el ERP solo las de puntos de venta con VEN letra X) y se
+  resuelve con un lock por usuario: dos aperturas simultáneas no crean dos cajas.
+- La sucursal de la planilla es la del usuario dueño de la caja (el ERP usaba la del usuario logueado, que para un CEO abriendo la
+  caja de otro dejaba la planilla en otra sucursal).
+- Ver o modificar una planilla de una sucursal que el usuario no opera devuelve 403 (salvo CEO/CTO/ADMINISTRADOR).
+- No se puede reabrir una planilla cerrada ni cambiar a un estado arbitrario (el ERP aceptaba cualquier ID de estado del combo).
+
+`FrmAjustesCajaABM` (ajustes manuales de caja) no se portó: `CajasPlanillasDetalle` solo tiene movimientos de recibos.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
 transaccionales: órdenes de pago,
-compras y facturas de proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación
+compras y facturas de proveedor, ajustes y movimientos de stock, depósitos/extracciones, conciliación
 bancaria y alta de usuarios (Membership).

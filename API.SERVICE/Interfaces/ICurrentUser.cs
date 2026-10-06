@@ -11,4 +11,7 @@ public interface ICurrentUser
     int? IdUsuario { get; }
 
     int? IdSucursal { get; }
+
+    /// <summary>Rol de ASP.NET Membership (aspnet_Roles), incluido en el JWT.</summary>
+    bool IsInRole(string role);
 }

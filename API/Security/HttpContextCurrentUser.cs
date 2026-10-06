@@ -25,5 +25,7 @@ public sealed class HttpContextCurrentUser : ICurrentUser
 
     public int? IdSucursal => int.TryParse(Claim(JwtTokenGenerator.IdSucursalClaim), out var id) ? id : null;
 
+    public bool IsInRole(string role) => Principal?.IsInRole(role) ?? false;
+
     private string? Claim(string type) => Principal?.FindFirst(type)?.Value;
 }
