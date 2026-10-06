@@ -1,5 +1,6 @@
 using API.DA.DbContexts;
 using API.SERVICE.Interfaces;
+using API.SERVICE.Interfaces.Afip;
 using API.SERVICE.Interfaces.Auth;
 using API.SERVICE.Interfaces.Clientes;
 using API.SERVICE.Interfaces.Sistema;
@@ -10,6 +11,7 @@ using API.SERVICE.Repositories.Clientes;
 using API.SERVICE.Repositories.Sistema;
 using API.SERVICE.Repositories.Ventas;
 using API.SERVICE.Security;
+using API.SERVICE.Services.Afip;
 using API.SERVICE.Services.Cache;
 using API.SERVICE.UseCases.Auth;
 using API.SERVICE.UseCases.Clientes;
@@ -73,6 +75,20 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IIniciarVentaInternaUseCase, IniciarVentaInternaUseCase>();
         services.AddScoped<ICreateVentaInternaUseCase, CreateVentaInternaUseCase>();
         services.AddScoped<IAnularVentaInternaUseCase, AnularVentaInternaUseCase>();
+
+        // Factura electrónica: gateway AFIP de IDEAS SA (BaseUrl y contraseña por configuración secreta)
+        services.Configure<AfipGatewayOptions>(configuration.GetSection(AfipGatewayOptions.SectionName));
+        services.AddHttpClient<IAfipGateway, IdeasAfipGateway>((sp, client) =>
+        {
+            var afip = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AfipGatewayOptions>>().Value;
+            if (!string.IsNullOrWhiteSpace(afip.BaseUrl))
+                client.BaseAddress = new Uri(afip.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(afip.TimeoutSeconds);
+        });
+        services.AddScoped<IAutorizarFacturaElectronicaUseCase, AutorizarFacturaElectronicaUseCase>();
+        services.AddScoped<IIniciarFacturaElectronicaUseCase, IniciarFacturaElectronicaUseCase>();
+        services.AddScoped<ICreateFacturaElectronicaUseCase, CreateFacturaElectronicaUseCase>();
+        services.AddScoped<IGetFacturasPendientesAfipUseCase, GetFacturasPendientesAfipUseCase>();
 
         return services;
     }

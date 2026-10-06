@@ -60,8 +60,14 @@ public sealed class FakeVentaRepository(FakeReciboCobroRepository recibos) : IVe
         {
             switch (e)
             {
-                case DocumentosCliente d when d.IdDocumentoCliente == 0: d.IdDocumentoCliente = _nextId++; break;
-                case DocumentosClienteDetalle d when d.IdDocumentoClienteDetalle == 0: d.IdDocumentoClienteDetalle = _nextId++; break;
+                case DocumentosCliente d when d.IdDocumentoCliente == 0:
+                    d.IdDocumentoCliente = _nextId++;
+                    Documentos[d.IdDocumentoCliente] = d; // visible para lecturas posteriores (fase 2 de AFIP)
+                    break;
+                case DocumentosClienteDetalle d when d.IdDocumentoClienteDetalle == 0 && !Detalles.Contains(d):
+                    d.IdDocumentoClienteDetalle = _nextId++;
+                    Detalles.Add(d);
+                    break;
                 case EntidadesCtaCte c when c.IdEntidadCtaCte == 0:
                     c.IdEntidadCtaCte = _nextId++;
                     recibos.CtaCte.Add(c);
@@ -106,6 +112,48 @@ public sealed class FakeVentaRepository(FakeReciboCobroRepository recibos) : IVe
 
     public Task AnularDocumentoAsync(int idDocumentoCliente, int estado, DateTime ahora, CancellationToken cancellationToken = default) =>
         Op($"AnularDocumento {idDocumentoCliente}={estado}");
+
+    // ---------- Factura electrónica ----------
+
+    public Dictionary<int, Sucursales> Sucursales { get; } = new()
+    {
+        [1] = new Sucursales { IdSucursal = 1, Cuit = "30712345678", PuntoVentaAfip = "2", IdCategoriaIva = FakeReferencias.CategoriaResponsableInscripto },
+    };
+
+    public Task<Sucursales?> GetSucursalAsync(int idSucursal, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Sucursales.GetValueOrDefault(idSucursal));
+
+    public Task ModificarDatosAfipAsync(int idDocumentoCliente, string puntoVenta, string numero, string cae, string codigoBarras, CancellationToken cancellationToken = default)
+    {
+        // Refleja el cambio en el documento, como lo vería una lectura posterior.
+        var doc = Documentos.GetValueOrDefault(idDocumentoCliente) ?? Added.OfType<DocumentosCliente>().FirstOrDefault(d => d.IdDocumentoCliente == idDocumentoCliente);
+        if (doc is not null)
+        {
+            doc.PuntoVenta = puntoVenta;
+            doc.Numero = numero;
+            doc.Cae = cae;
+            doc.BarCode = codigoBarras;
+        }
+        return Op($"DatosAfip {idDocumentoCliente} {puntoVenta}-{numero} CAE={cae} BAR={codigoBarras}");
+    }
+
+    public Task<List<DocumentosCliente>> GetPendientesAfipAsync(int idComprobanteTipo, int estadoAnulado, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Documentos.Values.Where(d => d.IdComprobanteTipo == idComprobanteTipo && d.Cae == "0" && d.Estado != estadoAnulado).ToList());
+
+    public Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
+    {
+        Operaciones.Add($"BloquearAutorizacion {idDocumentoCliente}");
+        return Task.FromResult<IAsyncDisposable>(new Liberar(() => Operaciones.Add($"LiberarAutorizacion {idDocumentoCliente}")));
+    }
+
+    private sealed class Liberar(Action alLiberar) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync()
+        {
+            alLiberar();
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private Task Op(FormattableString descripcion)
     {

@@ -53,11 +53,16 @@ internal static class VentaContexto
         currentUser.IdUsuario
         ?? throw new ForbiddenException("El usuario no tiene un registro en Usuarios del ERP; no puede operar comprobantes de venta.");
 
+    public static Task<CajaPlanillas> GetPlanillaAbiertaAsync(
+        IReciboCobroRepository comprobantes, IReferenciasRepository referencias, int idUsuario, int idTipo, CancellationToken ct) =>
+        GetPlanillaAbiertaAsync(comprobantes, referencias, idUsuario, idTipo, VentaRules.LetraInterna, ct);
+
+    /// <summary>Planilla abierta del usuario cuyo punto de venta emite el tipo y la letra (CajaPlanillas_IniciarPuntoVenta).</summary>
     public static async Task<CajaPlanillas> GetPlanillaAbiertaAsync(
-        IReciboCobroRepository comprobantes, IReferenciasRepository referencias, int idUsuario, int idTipo, CancellationToken ct)
+        IReciboCobroRepository comprobantes, IReferenciasRepository referencias, int idUsuario, int idTipo, string letra, CancellationToken ct)
     {
         var abierta = await referencias.IdAsync(EstadosCobranza.PlanillaAbierta, ct);
-        return await comprobantes.GetPlanillaAbiertaAsync(idUsuario, idTipo, VentaRules.LetraInterna, abierta, ct)
+        return await comprobantes.GetPlanillaAbiertaAsync(idUsuario, idTipo, letra, abierta, ct)
             ?? throw new BusinessException("No se pueden generar comprobantes: no existe una planilla de caja abierta para este usuario.");
     }
 

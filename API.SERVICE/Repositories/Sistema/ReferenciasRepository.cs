@@ -29,6 +29,18 @@ public sealed class ReferenciasRepository : IReferenciasRepository
                 .FirstOrDefaultAsync(cancellationToken);
         });
 
+    public Task<string?> GetParametroEmpresaAsync(string categoria, string nombre, int idEmpresa, CancellationToken cancellationToken = default) =>
+        MemoAsync($"PE|{categoria}|{nombre}|{idEmpresa}", async () =>
+        {
+            var cat = categoria.TrimEnd();
+            var nom = nombre.TrimEnd();
+            return await _context.Parametros.AsNoTracking()
+                .Where(p => p.Categoria!.TrimEnd() == cat && p.Nombre!.TrimEnd() == nom && p.IdEmpresa == idEmpresa)
+                .OrderBy(p => p.IdParametro)
+                .Select(p => p.Valor)
+                .FirstOrDefaultAsync(cancellationToken);
+        });
+
     public async Task<int> GetParametroEnteroAsync(string categoria, string nombre, CancellationToken cancellationToken = default)
     {
         var valor = await GetParametroAsync(categoria, nombre, cancellationToken);

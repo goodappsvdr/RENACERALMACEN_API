@@ -78,6 +78,29 @@ public class VentaQueriesTranslationTests
     }
 
     [Fact]
+    public async Task FacturaElectronica_TraducenASql()
+    {
+        await _repo.GetSucursalAsync(1);
+        await _repo.GetPendientesAfipAsync(3, 99);
+        await _repo.ModificarDatosAfipAsync(800, "0002", "00000123", "71234567890123", "30712345678...");
+
+        _interceptor.Commands.Should().HaveCount(3);
+        _interceptor.Commands.ElementAt(1).Should().Contain("[d].[CAE] = '0'");
+        LastSql.Should().StartWith("UPDATE").And.Contain("[CAE] = @").And.NotContain("[ID_PuntoVenta]", "el SP del ERP no lo modifica");
+    }
+
+    [Fact]
+    public async Task BloquearAutorizacion_UsaAppLockDeSesionYLoLibera()
+    {
+        await using (await _repo.BloquearAutorizacionAsync(800))
+        {
+            _interceptor.Commands.Last().Should().Contain("sp_getapplock").And.Contain("@LockOwner = 'Session'");
+        }
+
+        LastSql.Should().Contain("sp_releaseapplock");
+    }
+
+    [Fact]
     public async Task Escrituras_TraducenASql()
     {
         await _repo.SumarStockAsync(10, 1, 2, Ahora);

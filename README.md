@@ -35,6 +35,8 @@ dotnet tool restore                       # dotnet-ef (manifiesto local)
 dotnet user-secrets --project API set "ConnectionStrings:DefaultConnection" "Server=...;Database=ELRENACER;User ID=...;Password=...;TrustServerCertificate=True"
 dotnet user-secrets --project API set "Jwt:Key" "<clave aleatoria de 32+ caracteres>"
 # opcional; sin Redis se usa cache en memoria:
+dotnet user-secrets --project API set "AfipGateway:BaseUrl" "<url del gateway>"
+dotnet user-secrets --project API set "AfipGateway:Password" "<contraseña del certificado>"
 dotnet user-secrets --project API set "ConnectionStrings:Redis" "<host>:6380,password=...,ssl=True,abortConnect=False,connectTimeout=2000,syncTimeout=1000"
 
 dotnet run --project API                  # Swagger en /swagger (Development)
@@ -249,18 +251,49 @@ Pendiente de definir con negocio:
 - `ItemsOfertas_*Cantidad_Disponible` actualiza `OfertasAgotamiento` de **todas** las sucursales de la oferta (se mantiene).
 - En la anulación sin remitos el ERP indexaba la cabecera por número de línea (`ods22.Rows(i)`); acá cada línea usa su propio detalle.
 
-## Factura electrónica (AFIP) — diseño acordado
+### Factura electrónica — FV (`/api/DocumentoCliente`)
 
-Pendiente de implementar. Decisiones tomadas:
-- **Dos fases:** la factura se graba como "pendiente AFIP" y se confirma; después se pide el CAE y se actualiza. Si AFIP falla
-  o se corta, queda pendiente y se reintenta consultando a AFIP si ya se emitió. Nunca queda un CAE sin factura (el ERP llamaba
-  a AFIP con la transacción abierta).
-- Cliente del gateway de IDEAS SA detrás de una interfaz; por ahora se prueba solo con dobles (sin homologación).
-- La contraseña del certificado va en configuración secreta (en el ERP está escrita en `API_GA_AFIP.vb`).
+Port de `Agregar_Ws` / `IniciarPuntoVenta_WS` (`FrmFacturasAFIP`) y del cliente `API_GA_AFIP.vb`. Letras A, B y C.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET electronica/nuevo?letra=A&idSucursal=1` | Planilla abierta, punto de venta AFIP de la sucursal y próximo número según AFIP. 503 si AFIP no responde. |
+| `POST electronica` | **Fase 1:** graba la factura completa (igual que el interno: detalle, stock, cta. cte., recibo) con `CAE = "0"` y la confirma. **Fase 2:** pide el CAE. 201 autorizada · 202 AFIP no respondió (queda pendiente) · 422 AFIP la rechazó · 503 AFIP no respondió antes de grabar (no se grabó nada). |
+| `POST {id}/autorizar` | Reintento de una pendiente. |
+| `GET electronica/pendientes` | Facturas grabadas que todavía no tienen CAE. |
+
+**Por qué dos fases:** el ERP pedía el CAE con la transacción abierta y confirmaba después. Si AFIP aprobaba pero el commit fallaba,
+quedaba un **CAE emitido sin factura** (y el número consumido en AFIP), y las tablas quedaban bloqueadas durante la llamada.
+Ahora:
+- **Aprobada** → transacción corta: CAE, número definitivo (el que asigna AFIP), código de barras, QR (imagen PNG en base64, como el ERP)
+  y libro de IVA ventas + `TxtVentasAlicuotas` si la sucursal es Responsable Inscripto.
+- **Rechazada** → se revierte la factura con el mismo anulador del interno (stock, cta. cte., cobro) y queda anulada con la
+  observación `RECHAZADO POR AFIP: ...`.
+- **Sin respuesta** → queda pendiente (`CAE = "0"`, la misma marca que ya usaba el ERP: no hace falta ningún estado nuevo).
+- **Reintento** → antes de pedir otro CAE se consulta el último autorizado en AFIP: si ya alcanzó el número esperado, el intento
+  anterior pudo haberse emitido y responde 409 para verificar a mano (evita facturas duplicadas en AFIP).
+- Lock por factura (`sp_getapplock` de sesión) mientras se pide el CAE: dos reintentos simultáneos no pueden emitir dos veces.
+
+Se mantiene del ERP: sucursal RI → `GenerateVoucher` con IVA por alícuota (21 % → Id 5, 10,5 % → 4, 27 % → 6, exento en `ImpOpEx`)
+y descuento global aplicado a cada alícuota; si no es RI → `GenerateVoucherMono` sin IVA. Tipo de documento por largo del CUIT
+(vacío / 11 dígitos / DNI). Certificado por sucursal (`API/CARPETA` y `API/CERTFICADO` con `ID_Empresa` = sucursal).
+`DocumentosCliente_Modificar_DatosAfip` no actualiza `ID_PuntoVenta` (el SP hace `ID_PuntoVenta = ID_PuntoVenta`): se mantiene.
+
+Diferencias **intencionales**:
+- Con neto exento, el ERP ponía en 0 el **IVA del 27 %** (bug); acá se pone en 0 el IVA del exento.
+- El QR usa el número que asignó AFIP (el ERP usaba el estimado al abrir la pantalla).
+- Letra inválida se rechaza antes de grabar (el ERP fallaba después de insertar).
+
+**Configuración** (`AfipGateway`): `BaseUrl` (el ERP usa `http://ideassa.com.ar/AFIP_GA_API_48/api`), `Password` del certificado
+(**solo** por user-secrets / variable de entorno `AfipGateway__Password`), `IsProdEnvironment` (**false por defecto**: homologación;
+para emitir facturas reales hay que ponerlo en true explícitamente) y `TimeoutSeconds`.
+
+**Sin probar contra AFIP:** el cliente del gateway está probado con un HTTP simulado que reproduce los JSON de `API_GA_AFIP.vb`.
+Falta validarlo en homologación (formato de fechas: el ERP mandaba `/Date(...)/` y acá va ISO 8601).
 
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: factura electrónica y notas de crédito (AFIP), remitos, presupuestos, órdenes de pago, compras y
-facturas de proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación bancaria
-y alta de usuarios (Membership).
+transaccionales: notas de crédito electrónicas (AFIP, con comprobante asociado), remitos, presupuestos, órdenes de pago,
+compras y facturas de proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación
+bancaria y alta de usuarios (Membership).

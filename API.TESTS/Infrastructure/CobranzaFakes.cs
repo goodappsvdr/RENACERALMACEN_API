@@ -48,7 +48,21 @@ public sealed class FakeReferencias : IReferenciasRepository
         [("NUMERACION", "RV")] = "0",
         [("COMPROBANTE", "PV")] = Pv.ToString(),
         [("ELEMENTO", "CTACTE")] = ElementoCtaCte.ToString(),
+        // Factura electrónica
+        [("AFIP", "FACTURA A")] = "1",
+        [("AFIP", "FACTURA B")] = "6",
+        [("AFIP", "FACTURA C")] = "11",
+        [("AFIP", "CONCEPTO")] = "1",
+        [("AFIP", "URL")] = "https://www.afip.gob.ar/fe/qr/?p=",
+        [("DOCTIPO", "CUIT")] = "80",
+        [("DOCTIPO", "DNI")] = "96",
+        [("DOCTIPO", "SIN IDENTIFICAR")] = "99",
+        [("API", "CARPETA")] = "certificados",
+        [("API", "CERTFICADO")] = "elrenacer.pfx",
     };
+
+    /// <summary>ID_Categoria de "RESP. INSCRIPTO" (CATIVA).</summary>
+    public const int CategoriaResponsableInscripto = 1;
 
     public int Estado((string Categoria, string Nombre) estado) => Estado(estado.Categoria, estado.Nombre);
 
@@ -70,7 +84,10 @@ public sealed class FakeReferencias : IReferenciasRepository
         Task.FromResult(Estado(categoria, nombre));
 
     public Task<int> GetIdCategoriaAsync(string categoriaTipo, string nombre, CancellationToken cancellationToken = default) =>
-        Task.FromResult(ChequeAutomatico);
+        Task.FromResult(categoriaTipo == "CATIVA" && nombre == "RESP. INSCRIPTO" ? CategoriaResponsableInscripto : ChequeAutomatico);
+
+    public Task<string?> GetParametroEmpresaAsync(string categoria, string nombre, int idEmpresa, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Parametros.GetValueOrDefault((categoria, nombre)));
 }
 
 /// <summary>Repositorio de recibos en memoria: registra altas y operaciones para inspeccionarlas en los tests.</summary>

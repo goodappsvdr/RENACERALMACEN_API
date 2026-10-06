@@ -10,6 +10,12 @@ public interface IReferenciasRepository
     /// <summary>Valor de Parametros por categoría y nombre; null si no existe.</summary>
     Task<string?> GetParametroAsync(string categoria, string nombre, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Valor de Parametros por categoría, nombre e ID_Empresa (Parametros_BuscarporCategoriaNombreEmpresa).
+    /// El ERP lo usa con el ID de sucursal para los datos del certificado de AFIP (API/CARPETA, API/CERTFICADO).
+    /// </summary>
+    Task<string?> GetParametroEmpresaAsync(string categoria, string nombre, int idEmpresa, CancellationToken cancellationToken = default);
+
     /// <summary>Parámetro numérico obligatorio (p. ej. COMPROBANTE/REC). Lanza si falta o no es un entero.</summary>
     Task<int> GetParametroEnteroAsync(string categoria, string nombre, CancellationToken cancellationToken = default);
 

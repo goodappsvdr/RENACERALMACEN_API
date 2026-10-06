@@ -81,6 +81,26 @@ public interface IVentaRepository
 
     /// <summary>DocumentosCliente_Anular.</summary>
     Task AnularDocumentoAsync(int idDocumentoCliente, int estado, DateTime ahora, CancellationToken cancellationToken = default);
+
+    // ---------- Factura electrónica ----------
+
+    /// <summary>Sucursal emisora (Sucursales_BuscarPorID): CUIT, punto de venta AFIP y categoría de IVA.</summary>
+    Task<Db.Sucursales?> GetSucursalAsync(int idSucursal, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// DocumentosCliente_Modificar_DatosAfip: punto de venta, número, CAE y código de barras.
+    /// Igual que el SP, no toca ID_PuntoVenta (el SP hace ID_PuntoVenta = ID_PuntoVenta).
+    /// </summary>
+    Task ModificarDatosAfipAsync(int idDocumentoCliente, string puntoVenta, string numero, string cae, string codigoBarras, CancellationToken cancellationToken = default);
+
+    /// <summary>Facturas del tipo indicado todavía sin CAE (CAE = "0") y no anuladas.</summary>
+    Task<List<Db.DocumentosCliente>> GetPendientesAfipAsync(int idComprobanteTipo, int estadoAnulado, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lock exclusivo de la factura mientras se pide el CAE (sp_getapplock de sesión: dura lo que dura la llamada a AFIP,
+    /// que va fuera de toda transacción). Si otro request ya la está autorizando, lanza ConflictException.
+    /// </summary>
+    Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default);
 }
 
 public sealed record OfertaActivaRow(int IdOferta, int TipoOferta);

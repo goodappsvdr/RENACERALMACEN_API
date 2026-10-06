@@ -1,4 +1,5 @@
 using API.DA.DbContexts;
+using API.SERVICE.Domain.Exceptions;
 using API.SERVICE.Domain.Ventas;
 using API.SERVICE.Interfaces.Ventas;
 using Microsoft.EntityFrameworkCore;
@@ -172,6 +173,70 @@ public sealed class VentaRepository : IVentaRepository
 
     public Task BorrarRemitoAsociadoAsync(int idDocumentoClienteRemito, CancellationToken cancellationToken = default) =>
         _context.DocumentosClienteRemitos.Where(r => r.IdDocumentoClienteRemito == idDocumentoClienteRemito).ExecuteDeleteAsync(cancellationToken);
+
+    // ---------- Factura electrónica ----------
+
+    public Task<Db.Sucursales?> GetSucursalAsync(int idSucursal, CancellationToken cancellationToken = default) =>
+        _context.Sucursales.AsNoTracking().FirstOrDefaultAsync(s => s.IdSucursal == idSucursal, cancellationToken);
+
+    public Task ModificarDatosAfipAsync(int idDocumentoCliente, string puntoVenta, string numero, string cae, string codigoBarras, CancellationToken cancellationToken = default) =>
+        _context.DocumentosCliente.Where(d => d.IdDocumentoCliente == idDocumentoCliente)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.PuntoVenta, puntoVenta)
+                .SetProperty(d => d.Numero, numero)
+                .SetProperty(d => d.Cae, cae)
+                .SetProperty(d => d.BarCode, codigoBarras), cancellationToken);
+
+    public Task<List<Db.DocumentosCliente>> GetPendientesAfipAsync(int idComprobanteTipo, int estadoAnulado, CancellationToken cancellationToken = default) =>
+        _context.DocumentosCliente.AsNoTracking()
+            .Where(d => d.IdComprobanteTipo == idComprobanteTipo && d.Cae == AfipCaePendiente && d.Estado != estadoAnulado)
+            .OrderBy(d => d.IdDocumentoCliente)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
+    {
+        var recurso = $"elrenacer:afip:documento:{idDocumentoCliente}";
+        await _context.Database.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            var resultado = await _context.Database
+                .SqlQuery<int>($"""
+                    DECLARE @r int;
+                    EXEC @r = sp_getapplock @Resource = {recurso}, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = 0;
+                    SELECT @r AS [Value];
+                    """)
+                .ToListAsync(cancellationToken);
+
+            if (resultado.Count > 0 && resultado[0] < 0)
+                throw new ConflictException($"El comprobante {idDocumentoCliente} se está autorizando en este momento. Reintentar en unos segundos.");
+
+            return new LiberarLock(_context, recurso);
+        }
+        catch
+        {
+            await _context.Database.CloseConnectionAsync();
+            throw;
+        }
+    }
+
+    private const string AfipCaePendiente = "0";
+
+    /// <summary>Libera el applock de sesión y devuelve la conexión.</summary>
+    private sealed class LiberarLock(ElRenacerDbContext context, string recurso) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                await context.Database.ExecuteSqlInterpolatedAsync(
+                    $"EXEC sp_releaseapplock @Resource = {recurso}, @LockOwner = 'Session'");
+            }
+            finally
+            {
+                await context.Database.CloseConnectionAsync();
+            }
+        }
+    }
 
     public Task AnularDocumentoAsync(int idDocumentoCliente, int estado, DateTime ahora, CancellationToken cancellationToken = default) =>
         _context.DocumentosCliente.Where(d => d.IdDocumentoCliente == idDocumentoCliente)
