@@ -1,0 +1,15 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace API.DA.Entities;
+
+public partial class Marcas
+{
+    public int IdMarca { get; set; }
+
+    public string? Descripcion { get; set; }
+
+    public int? IdEmpresa { get; set; }
+
+    public int? Estado { get; set; }
+}

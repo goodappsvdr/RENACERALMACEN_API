@@ -1,0 +1,61 @@
+using API.DA.DbContexts;
+using API.SERVICE.Interfaces.Auth;
+using API.SERVICE.Repositories.Auth;
+using API.SERVICE.Security;
+using API.SERVICE.Services.Cache;
+using API.SERVICE.UseCases.Auth;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace API.SERVICE.DependencyInjection;
+
+public static partial class ServiceCollectionExtensions
+{
+    /// <summary>Único punto de registro de la aplicación. Program.cs solo llama a este método.</summary>
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection (user-secrets / variable de entorno).");
+
+        services.AddDbContext<ElRenacerDbContext>(options =>
+            options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure(maxRetryCount: 3)));
+
+        AddCache(services, configuration);
+
+        // Auth
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<MembershipOptions>(configuration.GetSection(MembershipOptions.SectionName));
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<IAuthRepository, AuthRepository>();
+        services.AddScoped<ILoginUseCase, LoginUseCase>();
+
+        // Repositorios, casos de uso y lookups generados por tools/ApiGenerator.
+        AddGeneratedServices(services);
+
+        return services;
+    }
+
+    static partial void AddGeneratedServices(IServiceCollection services);
+
+    private static void AddCache(IServiceCollection services, IConfiguration configuration)
+    {
+        var redis = configuration.GetConnectionString("Redis");
+        if (string.IsNullOrWhiteSpace(redis))
+        {
+            // Sin Redis configurado (desarrollo local): cache en memoria con el mismo contrato.
+            services.AddDistributedMemoryCache();
+        }
+        else
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redis;
+                options.InstanceName = string.Empty; // el prefijo ya va en CacheKeys
+            });
+        }
+
+        services.AddSingleton<IRedisCacheService, RedisCacheService>();
+    }
+}
