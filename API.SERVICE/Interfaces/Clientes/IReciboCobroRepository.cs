@@ -37,6 +37,23 @@ public interface IReciboCobroRepository
     /// <summary>ID de la fila de cta. cte. de un comprobante (Entidades_BuscarPorID_ComprobanteTipoID_Comprobante, primera fila).</summary>
     Task<long?> GetIdCtaCteAsync(int idComprobanteTipo, int idComprobante, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Clientes principales con saldo a cobrar (RecibosAutomaticos_BuscarEntidadesPrincipales): suma de Total2 de sus
+    /// comprobantes de venta/recibo, solo saldos positivos, de mayor a menor.
+    /// </summary>
+    Task<List<SaldoEntidadRow>> GetSaldosRecibosAutomaticosAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Sucursal "LOCAL" entre las activas habilitadas para el usuario (Sucursales_BuscarActivas_Usuario); null si no la tiene.</summary>
+    Task<int?> GetIdSucursalLocalAsync(int idUsuario, CancellationToken cancellationToken = default);
+
+    // ---------- Concurrencia ----------
+
+    /// <summary>
+    /// Lock exclusivo por cliente hasta el fin de la transacción (sp_getapplock). Serializa los recibos de un mismo
+    /// cliente entre requests e instancias de la API. Lanza si no se obtiene a tiempo.
+    /// </summary>
+    Task BloquearEntidadAsync(int idEntidad, CancellationToken cancellationToken = default);
+
     // ---------- Altas (se confirman con SaveChangesAsync) ----------
 
     void Add<TEntity>(TEntity entity) where TEntity : class;
@@ -99,6 +116,8 @@ public sealed record ComprobantePendienteRow(
     decimal? InteresAplicado,
     short? InteresCliente,
     byte? DiasInteres);
+
+public sealed record SaldoEntidadRow(int IdEntidad, string? RazonSocial, decimal Saldo);
 
 public sealed record ImputacionRow(
     int? IdEntidad,

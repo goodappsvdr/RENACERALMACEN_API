@@ -1,3 +1,4 @@
+using API.SERVICE.Domain;
 using API.SERVICE.Domain.Cobranzas;
 using API.SERVICE.Domain.Exceptions;
 using API.SERVICE.Interfaces;
@@ -66,6 +67,9 @@ public sealed class CreateReciboUseCase : ICreateReciboUseCase
 
         var recibo = await _unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
+            // Primero el lock del cliente: un segundo recibo simultáneo espera y, al entrar, ve los comprobantes ya cancelados.
+            await _repository.BloquearEntidadAsync(idEntidad, ct);
+
             var codigos = await CodigosCobranza.LoadAsync(_referencias, ct);
             var rec = codigos.Rec;
 
@@ -245,7 +249,7 @@ public sealed class CreateReciboUseCase : ICreateReciboUseCase
             {
                 var saldo = ImputacionRules.Redondear(ImputacionRules.SaldoVisible(idTipo, filas[0].Saldo ?? 0));
                 throw new BusinessException(
-                    $"El importe del comprobante {filas[0].Concepto} ({imputacion.ImporteComprobante:0.00}) no coincide con su saldo pendiente ({saldo:0.00}) más el interés ({imputacion.InteresAplicado:0.00}).");
+                    $"El importe del comprobante {filas[0].Concepto} ({Formato.Importe(imputacion.ImporteComprobante)}) no coincide con su saldo pendiente ({Formato.Importe(saldo)}) más el interés ({Formato.Importe(imputacion.InteresAplicado)}).");
             }
 
             resultado.Add((imputacion, tipo, coincide.Concepto));

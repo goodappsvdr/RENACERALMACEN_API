@@ -1,5 +1,6 @@
 using API.DA.DbContexts;
 using API.SERVICE.Domain.Cobranzas;
+using API.SERVICE.Domain.Exceptions;
 using API.SERVICE.Interfaces.Clientes;
 using Microsoft.EntityFrameworkCore;
 using Db = global::API.DA.Entities;
@@ -106,6 +107,54 @@ public sealed class ReciboCobroRepository : IReciboCobroRepository
             .OrderBy(c => c.IdEntidadCtaCte)
             .Select(c => (long?)c.IdEntidadCtaCte)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<List<SaldoEntidadRow>> GetSaldosRecibosAutomaticosAsync(CancellationToken cancellationToken = default)
+    {
+        // Tipos fijos del SP del ERP (los mismos del reporte "clientes principales").
+        int[] tipos = [3, 11, 8, 7];
+        var saldos = from e in _context.Entidades
+                     join cc in _context.EntidadesCtaCte on e.IdEntidad equals cc.IdEntidad
+                     where e.EsHijo == false && tipos.Contains(cc.IdComprobanteTipo!.Value)
+                     group cc.Total2 by new { e.IdEntidad, e.RazonSocial } into g
+                     select new { g.Key.IdEntidad, g.Key.RazonSocial, Saldo = g.Sum() };
+
+        // El filtro sobre la suma se traduce como HAVING (un NULL no pasa, igual que en el SP).
+        return saldos
+            .Where(s => s.Saldo > 0)
+            .OrderByDescending(s => s.Saldo)
+            .Select(s => new SaldoEntidadRow(s.IdEntidad, s.RazonSocial, s.Saldo ?? 0m))
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<int?> GetIdSucursalLocalAsync(int idUsuario, CancellationToken cancellationToken = default) =>
+        // Mismos joins que Sucursales_BuscarActivas_Usuario (incluido el estado 161 = activa, hardcodeado en el ERP).
+        (from s in _context.Sucursales
+         join p in _context.Provincias on s.IdProvincia equals p.IdProvincia
+         join l in _context.Localidades on s.IdLocalidad equals l.IdLocalidad
+         join es in _context.Estados on s.Estado equals es.IdEstado
+         join u in _context.UsuariosSucursales on s.IdSucursal equals u.IdSucursal
+         where s.Estado == 161 && u.IdUsuario == idUsuario && s.Descripcion!.Trim().ToUpper() == "LOCAL"
+         orderby s.IdCategoriaIva
+         select (int?)s.IdSucursal)
+        .FirstOrDefaultAsync(cancellationToken);
+
+    // ---------- Concurrencia ----------
+
+    public async Task BloquearEntidadAsync(int idEntidad, CancellationToken cancellationToken = default)
+    {
+        var recurso = $"elrenacer:recibos:entidad:{idEntidad}";
+        var resultado = await _context.Database
+            .SqlQuery<int>($"""
+                DECLARE @r int;
+                EXEC @r = sp_getapplock @Resource = {recurso}, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000;
+                SELECT @r AS [Value];
+                """)
+            .ToListAsync(cancellationToken);
+
+        // 0 = obtenido, 1 = obtenido tras esperar; negativo = timeout / deadlock / error.
+        if (resultado.Count > 0 && resultado[0] < 0)
+            throw new ConflictException("Otro usuario está generando un recibo para este cliente. Reintentar en unos segundos.");
+    }
 
     // ---------- Altas ----------
 

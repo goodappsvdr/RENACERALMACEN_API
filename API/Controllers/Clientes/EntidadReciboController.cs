@@ -36,6 +36,26 @@ public sealed partial class EntidadReciboController
         return CreatedAtAction(nameof(GetById), new { id = created.IdEntidadRecibo }, created);
     }
 
+    /// <summary>Clientes con saldo a cobrar, candidatos a la emisión masiva de recibos.</summary>
+    [HttpGet("automaticos/entidades")]
+    [ProducesResponseType(typeof(IReadOnlyList<EntidadReciboAutomaticoDisplay>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<EntidadReciboAutomaticoDisplay>>> EntidadesRecibosAutomaticos(
+        [FromServices] IGetEntidadesRecibosAutomaticosUseCase useCase, CancellationToken cancellationToken) =>
+        Ok(await useCase.ExecuteAsync(cancellationToken));
+
+    /// <summary>
+    /// Emisión masiva: un recibo en efectivo por cliente (hasta 10 por vez) que cancela todos sus comprobantes pendientes.
+    /// Cada cliente se graba en su propia transacción; la respuesta informa el resultado de cada uno.
+    /// </summary>
+    [HttpPost("automaticos")]
+    [ProducesResponseType(typeof(IReadOnlyList<ReciboAutomaticoResultado>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<ReciboAutomaticoResultado>>> GenerarAutomaticos(
+        [FromBody] GenerarRecibosAutomaticosDto dto, [FromServices] IGenerarRecibosAutomaticosUseCase useCase, CancellationToken cancellationToken) =>
+        Ok(await useCase.ExecuteAsync(dto, cancellationToken));
+
     /// <summary>Anulación: revierte la cta. cte. de los comprobantes imputados y anula caja, cheques, bancos y retenciones.</summary>
     [HttpPost("{id:int}/anular")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

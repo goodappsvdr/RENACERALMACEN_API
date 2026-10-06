@@ -43,8 +43,10 @@ public sealed class ImputacionDto
 
     [Required] public int? IdComprobanteTipo { get; set; }
 
-    /// <summary>Saldo del comprobante + interés. Tiene que coincidir con el saldo pendiente más <see cref="InteresAplicado"/>.</summary>
-    [Range(0, double.MaxValue)]
+    /// <summary>
+    /// Saldo del comprobante + interés, tal como lo devuelve comprobantes-pendientes. Tiene que coincidir con el saldo
+    /// pendiente más <see cref="InteresAplicado"/>. Es negativo para lo que está a favor del cliente (recibos previos, notas de crédito).
+    /// </summary>
     public decimal ImporteComprobante { get; set; }
 
     /// <summary>Interés por mora que se cobra sobre este comprobante.</summary>
@@ -120,3 +122,25 @@ public sealed record ComprobantePendienteDisplay(
     int DiasInteres,
     bool? Vencido,
     int DiasVencidos);
+
+/// <summary>Cliente con saldo a cobrar, candidato a recibo automático.</summary>
+public sealed record EntidadReciboAutomaticoDisplay(int IdEntidad, string? RazonSocial, decimal Saldo);
+
+/// <summary>Emisión masiva: un recibo en efectivo por cliente que cancela todos sus comprobantes pendientes.</summary>
+public sealed class GenerarRecibosAutomaticosDto
+{
+    public const int MaximoPorTanda = 10;
+
+    [Required, MinLength(1), MaxLength(MaximoPorTanda)]
+    public List<int> IdsEntidad { get; set; } = [];
+}
+
+/// <summary>Resultado por cliente: cada recibo va en su propia transacción, así que unos pueden salir y otros no.</summary>
+public sealed record ReciboAutomaticoResultado(
+    int IdEntidad,
+    string? RazonSocial,
+    bool Generado,
+    int? IdEntidadRecibo,
+    string? Recibo,
+    decimal Importe,
+    string? Mensaje);

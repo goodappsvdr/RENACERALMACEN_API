@@ -192,9 +192,31 @@ Comportamientos del ERP que se **mantienen** y conviene revisar con negocio (pos
 - El recargo de tarjeta suma al total del recibo pero no entra en la caja ni en el detalle.
 - Valores hardcodeados en el ERP: estado 56 para el recibo nuevo, estado 48 y tipos 4/12/9 (saldo invertido) y 11/3 (mora) en comprobantes pendientes.
 
+**Concurrencia:** cada recibo toma un lock exclusivo por cliente (`sp_getapplock`, dueño la transacción). Dos recibos
+simultáneos del mismo cliente (de distintos usuarios o instancias de la API) se serializan, y el segundo ve los
+comprobantes ya cancelados. Si no obtiene el lock en 15 s responde 409.
+
+### Emisión masiva de recibos (`/api/EntidadRecibo/automaticos`)
+
+Port de `FrmRecibosAutomaticos` (ticket DES-1723).
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET automaticos/entidades` | Clientes principales con saldo a cobrar (`RecibosAutomaticos_BuscarEntidadesPrincipales`). |
+| `POST automaticos` | `{ "idsEntidad": [...] }` (hasta 10): un recibo en efectivo por cliente que cancela todos sus comprobantes pendientes con interés 0. Devuelve el resultado de cada cliente. |
+
+Cada recibo se graba con **el mismo caso de uso que el recibo manual** (`CreateReciboUseCase`), en su propia
+transacción: si un cliente falla se informa en su resultado y se sigue con los demás. Se mantienen las reglas del ERP:
+sucursal LOCAL del usuario, planilla abierta, no se permite con numeración manual, el saldo de la grilla se recalcula en
+el servidor y tiene que coincidir con los comprobantes pendientes, los clientes con comprobantes de proveedor (OP/FC/COM)
+o de tipos desconocidos se hacen a mano, y se imputa primero lo que está a favor del cliente y después las facturas.
+
+Diferencia con el ERP: el `SyncLock` del WebForms solo serializaba dentro de un proceso; acá lo resuelve el lock por cliente
+en la base, que también cubre varias instancias de la API y los recibos manuales.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: facturación y notas de crédito (AFIP), remitos, presupuestos, cobranzas/recibos
-(alta y anulación ya portadas; falta la emisión masiva de FrmRecibosAutomaticos), órdenes de pago, compras y facturas de proveedor, ajustes y movimientos de stock,
-planillas de caja, depósitos/extracciones, conciliación bancaria y alta de usuarios (Membership).
+transaccionales: facturación y notas de crédito (AFIP), remitos, presupuestos, órdenes de pago, compras y facturas de
+proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación bancaria y alta de
+usuarios (Membership).

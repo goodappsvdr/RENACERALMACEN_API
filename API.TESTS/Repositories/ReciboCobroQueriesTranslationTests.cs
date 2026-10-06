@@ -65,6 +65,30 @@ public class ReciboCobroQueriesTranslationTests
     }
 
     [Fact]
+    public async Task SaldosRecibosAutomaticos_AgrupaYFiltraSaldosPositivosComoElSp()
+    {
+        await _repo.GetSaldosRecibosAutomaticosAsync();
+
+        LastSql.Should().Contain("[e].[EsHijo] = CAST(0 AS bit)").And.Contain("GROUP BY").And.Contain("HAVING").And.Contain("SUM([e0].[Total2])");
+    }
+
+    [Fact]
+    public async Task SucursalLocal_MismosJoinsYEstadoQueElSp()
+    {
+        await _repo.GetIdSucursalLocalAsync(3);
+
+        LastSql.Should().Contain("INNER JOIN [UsuariosSucursales]").And.Contain("INNER JOIN [Localidades]").And.Contain("= 161").And.Contain("UPPER(LTRIM(RTRIM([s].[Descripcion]))) = 'LOCAL'");
+    }
+
+    [Fact]
+    public async Task BloquearEntidad_UsaAppLockDeTransaccion()
+    {
+        await _repo.BloquearEntidadAsync(5);
+
+        LastSql.Should().Contain("sp_getapplock").And.Contain("@LockOwner = 'Transaction'");
+    }
+
+    [Fact]
     public async Task ReservarNumero_IncrementaYDevuelveAtomico()
     {
         var numero = await _repo.ReservarNumeroAsync("0003", "X", 7);

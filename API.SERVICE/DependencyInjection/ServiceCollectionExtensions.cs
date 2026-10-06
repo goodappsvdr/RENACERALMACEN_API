@@ -60,6 +60,8 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IGetComprobantesPendientesUseCase, GetComprobantesPendientesUseCase>();
         services.AddScoped<ICreateReciboUseCase, CreateReciboUseCase>();
         services.AddScoped<IAnularReciboUseCase, AnularReciboUseCase>();
+        services.AddScoped<IGetEntidadesRecibosAutomaticosUseCase, GetEntidadesRecibosAutomaticosUseCase>();
+        services.AddScoped<IGenerarRecibosAutomaticosUseCase, GenerarRecibosAutomaticosUseCase>();
 
         return services;
     }

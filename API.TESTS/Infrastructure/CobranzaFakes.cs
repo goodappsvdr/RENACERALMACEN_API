@@ -85,8 +85,15 @@ public sealed class FakeReciboCobroRepository : IReciboCobroRepository
     public long? Numerador { get; set; } = 41;
 
     public EntidadesRecibos? Recibo { get; set; }
-    public Entidades? Entidad { get; set; } = new() { IdEntidad = 5, RazonSocial = "ALMACEN DON PEPE", IdCategoriaIva = 2, Cuit = "20123456789" };
     public CajaPlanillas? Planilla { get; set; } = new() { IdPlanillaCaja = 77, PuntoVenta = "0003" };
+    public int? SucursalLocal { get; set; } = 2;
+    public List<SaldoEntidadRow> SaldosGrilla { get; } = [];
+    public List<int> Bloqueos { get; } = [];
+
+    public Dictionary<int, Entidades> Entidades { get; } = new()
+    {
+        [5] = new() { IdEntidad = 5, RazonSocial = "ALMACEN DON PEPE", IdCategoriaIva = 2, Cuit = "20123456789" },
+    };
 
     public T Single<T>() => Added.OfType<T>().Single();
     public IEnumerable<T> All<T>() => Added.OfType<T>();
@@ -98,13 +105,31 @@ public sealed class FakeReciboCobroRepository : IReciboCobroRepository
         Task.FromResult(Numerador + 1);
 
     public Task<Entidades?> GetEntidadAsync(int idEntidad, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Entidad?.IdEntidad == idEntidad ? Entidad : null);
+        Task.FromResult(Entidades.GetValueOrDefault(idEntidad));
+
+    public Task<List<SaldoEntidadRow>> GetSaldosRecibosAutomaticosAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(SaldosGrilla.ToList());
+
+    public Task<int?> GetIdSucursalLocalAsync(int idUsuario, CancellationToken cancellationToken = default) =>
+        Task.FromResult(SucursalLocal);
+
+    public Task BloquearEntidadAsync(int idEntidad, CancellationToken cancellationToken = default)
+    {
+        Bloqueos.Add(idEntidad);
+        return Task.CompletedTask;
+    }
 
     public Task<List<EntidadesCtaCte>> GetCtaCtePendienteAsync(int idEntidad, int idComprobante, int idComprobanteTipo, CancellationToken cancellationToken = default) =>
         Task.FromResult(CtaCte.Where(c => c.IdEntidad == idEntidad && c.IdComprobante == idComprobante && c.IdComprobanteTipo == idComprobanteTipo && c.Cancelado == false).ToList());
 
     public Task<List<ComprobantePendienteRow>> GetComprobantesPendientesAsync(int idEntidad, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new List<ComprobantePendienteRow>());
+        Task.FromResult(CtaCte
+            .Where(c => c.IdEntidad == idEntidad && c.Cancelado == false)
+            .OrderBy(c => API.SERVICE.Domain.Cobranzas.ImputacionRules.SaldoVisible(c.IdComprobanteTipo ?? 0, c.Saldo ?? 0))
+            .Select(c => new ComprobantePendienteRow(
+                c.IdComprobante, c.IdComprobanteTipo, c.IdEntidad, c.Concepto, Entidades.GetValueOrDefault(idEntidad)?.RazonSocial,
+                c.Fecha, c.FechaVencimiento, c.Saldo, c.InteresAplicado, null, null))
+            .ToList());
 
     public Task<EntidadesRecibos?> GetReciboAsync(int idRecibo, CancellationToken cancellationToken = default) =>
         Task.FromResult(Recibo?.IdEntidadRecibo == idRecibo ? Recibo : null);
