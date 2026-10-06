@@ -29,7 +29,7 @@ public static class TestServiceProvider
         services.RemoveAll<DbContextOptions<ElRenacerDbContext>>();
         services.RemoveAll<DbContextOptions>();
         services.AddDbContext<ElRenacerDbContext>(options => options
-            .UseSqlServer(OfflineConnection)
+            .UseSqlServer(OfflineConnection, sql => sql.UseCompatibilityLevel(130))
             .AddInterceptors(interceptor));
 
         return services;

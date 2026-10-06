@@ -1,13 +1,16 @@
 using API.DA.DbContexts;
 using API.SERVICE.Interfaces;
 using API.SERVICE.Interfaces.Auth;
+using API.SERVICE.Interfaces.Clientes;
 using API.SERVICE.Interfaces.Sistema;
 using API.SERVICE.Repositories.Auth;
 using API.SERVICE.Repositories.Base;
+using API.SERVICE.Repositories.Clientes;
 using API.SERVICE.Repositories.Sistema;
 using API.SERVICE.Security;
 using API.SERVICE.Services.Cache;
 using API.SERVICE.UseCases.Auth;
+using API.SERVICE.UseCases.Clientes;
 using API.SERVICE.UseCases.Items;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,7 +27,11 @@ public static partial class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection (user-secrets / variable de entorno).");
 
         services.AddDbContext<ElRenacerDbContext>(options =>
-            options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure(maxRetryCount: 3)));
+            options.UseSqlServer(connectionString, sql => sql
+                .EnableRetryOnFailure(maxRetryCount: 3)
+                // ELRENACER tiene compatibility_level 130 (aunque el servidor sea SQL Server 2022):
+                // EF no debe generar SQL que requiera un nivel mayor.
+                .UseCompatibilityLevel(130)));
 
         AddCache(services, configuration);
 
@@ -39,6 +46,7 @@ public static partial class ServiceCollectionExtensions
         // Infraestructura de flujos transaccionales
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IServerClock, SqlServerClock>();
+        services.AddScoped<IReferenciasRepository, ReferenciasRepository>();
 
         // Repositorios, casos de uso y lookups generados por tools/ApiGenerator.
         AddGeneratedServices(services);
@@ -46,6 +54,12 @@ public static partial class ServiceCollectionExtensions
         // Flujos compuestos (escritos a mano, usan los repositorios generados + sus partial)
         services.AddScoped<ICreateItemUseCase, CreateItemUseCase>();
         services.AddScoped<IUpdateItemUseCase, UpdateItemUseCase>();
+
+        services.AddScoped<IReciboCobroRepository, ReciboCobroRepository>();
+        services.AddScoped<IIniciarReciboUseCase, IniciarReciboUseCase>();
+        services.AddScoped<IGetComprobantesPendientesUseCase, GetComprobantesPendientesUseCase>();
+        services.AddScoped<ICreateReciboUseCase, CreateReciboUseCase>();
+        services.AddScoped<IAnularReciboUseCase, AnularReciboUseCase>();
 
         return services;
     }

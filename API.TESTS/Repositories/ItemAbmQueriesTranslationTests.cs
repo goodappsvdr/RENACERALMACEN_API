@@ -16,7 +16,7 @@ public class ItemAbmQueriesTranslationTests
     public ItemAbmQueriesTranslationTests()
     {
         var options = new DbContextOptionsBuilder<ElRenacerDbContext>()
-            .UseSqlServer("Server=offline;Database=ELRENACER;TrustServerCertificate=True")
+            .UseSqlServer("Server=offline;Database=ELRENACER;TrustServerCertificate=True", sql => sql.UseCompatibilityLevel(130))
             .AddInterceptors(_interceptor)
             .Options;
         _context = new ElRenacerDbContext(options);

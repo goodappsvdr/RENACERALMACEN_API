@@ -32,12 +32,32 @@ public sealed class OfflineSqlServerInterceptor : DbCommandInterceptor, IDbConne
     public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(InterceptionResult<DbDataReader>.SuppressWithResult(Respond(command)));
 
+    // ExecuteUpdate / ExecuteDelete: se captura el SQL y se informan 0 filas afectadas.
+    public override InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+    {
+        Commands.Enqueue(command.CommandText);
+        return InterceptionResult<int>.SuppressWithResult(0);
+    }
+
+    public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        Commands.Enqueue(command.CommandText);
+        return ValueTask.FromResult(InterceptionResult<int>.SuppressWithResult(0));
+    }
+
     private DbDataReader Respond(DbCommand command)
     {
         Commands.Enqueue(command.CommandText);
 
         var table = new DataTable();
-        if (command.CommandText.TrimStart().StartsWith("SELECT COUNT(*)", StringComparison.OrdinalIgnoreCase))
+        var sql = command.CommandText.TrimStart();
+        if (sql.StartsWith("SELECT CASE", StringComparison.OrdinalIgnoreCase))
+        {
+            // AnyAsync: EF espera una fila con el resultado del EXISTS.
+            table.Columns.Add("value", typeof(bool));
+            table.Rows.Add(false);
+        }
+        else if (sql.StartsWith("SELECT COUNT(*)", StringComparison.OrdinalIgnoreCase))
         {
             table.Columns.Add("count", typeof(int));
             table.Rows.Add(0);

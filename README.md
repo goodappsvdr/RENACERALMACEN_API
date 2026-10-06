@@ -158,9 +158,43 @@ Diferencias **intencionales** con el ERP:
 - Ítem sin ninguna fila en `ItemsSucursales`: el ERP fallaba con un error genérico; acá devuelve 400 con mensaje claro.
 - El usuario tiene que tener fila en `Usuarios` para modificar (lo pide el historial de precios); si no, 403.
 
+### Recibos de cobro (`/api/EntidadRecibo`)
+
+Port de `Agregar_Ws` / `Editar_Ws` / `IniciarPuntoVenta_WS` / `BuscarComprobantes_WS` (`FrmRecibos`).
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET nuevo` | Planilla de caja abierta del usuario, punto de venta y número sugerido. |
+| `GET comprobantes-pendientes?idEntidad=` | Comprobantes de la cta. cte. del cliente para imputar (saldo, vencimiento, días de mora, tasa de interés del cliente). |
+| `POST` | Alta: recibo + imputación a comprobantes (cta. cte. y estados) + cta. cte. del recibo + formas de pago (caja, cheques en cartera, depósitos/tarjetas en bancos, retenciones) + detalle + movimientos + numeración. |
+| `POST {id}/anular` | Anulación: recibo, detalle, caja, cheques, bancos y retenciones anulados; devuelve el saldo a los comprobantes imputados y les restaura el estado; anula la cta. cte. del recibo. |
+
+Los IDs de tipos de comprobante, elementos de cobro, estados y categorías se resuelven por nombre contra
+`Parametros` / `Estados` / `Categorias` (como `SingletonParametro` / `ValorEstado` / `ValorCategoria`), con memoria por request.
+
+Diferencias **intencionales** con el ERP:
+- **Planilla de caja y número del recibo los resuelve el servidor** (el ERP los recibía del navegador). El número se reserva con
+  `UPDATE ... OUTPUT` dentro de la transacción: dos cajeros no pueden obtener el mismo número. Con `NUMERACION/REC = 1` se
+  respeta la numeración manual.
+- **Razón social, categoría de IVA y CUIT salen de la ficha del cliente**, no del request.
+- **Totales calculados en el servidor** con las fórmulas del formulario: recibo = formas de pago + recargo de tarjeta;
+  comprobantes = importes imputados + recargo de tarjeta.
+- **Cada comprobante imputado se valida:** tiene que ser del cliente, estar pendiente en la cta. cte. y su importe tiene
+  que ser saldo pendiente + interés (±0,01). El ERP confiaba en el importe que mandaba el navegador.
+- Imputar una factura cuando el importe del recibo ya se consumió: el ERP la marcaba "cobrado parcial" con 0 imputado; acá se rechaza.
+- Tipo de comprobante no imputable: el ERP lo ignoraba en silencio; acá se rechaza.
+- Anular un recibo ya anulado devuelve 409 (el ERP devolvía status "300").
+
+Comportamientos del ERP que se **mantienen** y conviene revisar con negocio (posibles bugs):
+- La cta. cte. del recibo guarda el interés **del último** comprobante imputado, no la suma.
+- Al anular, se devuelve al comprobante `ImporteRecibo - InteresAplicado`, donde el interés es el **acumulado** del comprobante (no solo el de este recibo).
+- FC/COM se marcan PAGADO en `DocumentosCliente` al cobrar, pero la anulación los revierte en `DocumentosProveedor`.
+- El recargo de tarjeta suma al total del recibo pero no entra en la caja ni en el detalle.
+- Valores hardcodeados en el ERP: estado 56 para el recibo nuevo, estado 48 y tipos 4/12/9 (saldo invertido) y 11/3 (mora) en comprobantes pendientes.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
 transaccionales: facturación y notas de crédito (AFIP), remitos, presupuestos, cobranzas/recibos
-(incluye emisión masiva), órdenes de pago, compras y facturas de proveedor, ajustes y movimientos de stock,
+(alta y anulación ya portadas; falta la emisión masiva de FrmRecibosAutomaticos), órdenes de pago, compras y facturas de proveedor, ajustes y movimientos de stock,
 planillas de caja, depósitos/extracciones, conciliación bancaria y alta de usuarios (Membership).
