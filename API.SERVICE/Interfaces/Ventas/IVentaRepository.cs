@@ -126,6 +126,17 @@ public interface IVentaRepository
     /// <summary>Líneas del comprobante con saldo de stock pendiente (..._Pendiente_Remitar).</summary>
     Task<List<LineaPendienteRow>> GetLineasPendientesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default);
 
+    // ---------- Presupuestos ----------
+
+    /// <summary>DocumentosCliente_Modificar_Presupuesto: cliente, datos impresos, totales y observación de la cabecera.</summary>
+    Task ModificarPresupuestoAsync(int idDocumentoCliente, PresupuestoCabeceraRow datos, CancellationToken cancellationToken = default);
+
+    /// <summary>DocumentosClienteDetalle_Eliminar (borra todas las líneas del comprobante).</summary>
+    Task BorrarDetallesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default);
+
+    /// <summary>EntidadesCtaCteStockMovimientosDetalle_Eliminar.</summary>
+    Task BorrarMovimientosStockAsync(int idComprobante, int idComprobanteTipo, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Lock exclusivo de la factura mientras se pide el CAE (sp_getapplock de sesión: dura lo que dura la llamada a AFIP,
     /// que va fuera de toda transacción). Si otro request ya la está autorizando, lanza ConflictException.
@@ -136,4 +147,8 @@ public interface IVentaRepository
 public sealed record OfertaActivaRow(int IdOferta, int TipoOferta);
 
 /// <summary>Línea con saldo pendiente: el detalle del comprobante más su movimiento de stock.</summary>
+public sealed record PresupuestoCabeceraRow(
+    int IdCliente, string? RazonSocial, int? IdCategoriaIva, string? NroDoc, int? IdProvincia, int? IdLocalidad, string? Calle,
+    decimal Neto, decimal Iva, decimal Otros, decimal Total, string Observaciones);
+
 public sealed record LineaPendienteRow(Db.DocumentosClienteDetalle Detalle, int IdComprobanteTipo, decimal Saldo);

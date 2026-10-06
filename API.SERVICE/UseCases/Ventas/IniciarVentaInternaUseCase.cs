@@ -66,7 +66,7 @@ internal static class VentaContexto
             ?? throw new BusinessException("No se pueden generar comprobantes: no existe una planilla de caja abierta para este usuario.");
     }
 
-    /// <summary>NUMERACION/RV = 1: el usuario carga punto de venta y número a mano.</summary>
-    public static async Task<bool> NumeracionManualAsync(IReferenciasRepository referencias, CancellationToken ct) =>
-        (await referencias.GetParametroAsync("NUMERACION", "RV", ct))?.Trim() == "1";
+    /// <summary>NUMERACION/{tipo} = 1 (RV para internos y remitos, PV para presupuestos): punto de venta y número a mano.</summary>
+    public static async Task<bool> NumeracionManualAsync(IReferenciasRepository referencias, CancellationToken ct, string tipo = "RV") =>
+        (await referencias.GetParametroAsync("NUMERACION", tipo, ct))?.Trim() == "1";
 }

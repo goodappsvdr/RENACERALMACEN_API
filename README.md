@@ -363,9 +363,33 @@ Diferencias **intencionales** con el ERP:
 Se mantiene del ERP y conviene revisar con negocio: transporte, chofer y unidad se graban vacíos (el ERP los tenía comentados);
 al anular, el comprobante entregado vuelve a GENERADO/ENTREGADO PARCIAL aunque antes estuviera COBRADO.
 
+### Presupuestos — PV (`/api/DocumentoCliente`)
+
+Port de `Agregar_Ws` / `Modificar_Ws` / `Anular_Ws` / `IniciarPuntoVenta_WS` (`FrmPresupuestosABM`). Casi sin uso en producción
+(3 presupuestos, de 2024).
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET presupuesto/nuevo?idEntidad=` | Letra (`ComprobantesLetras`: hoy P, solo configurada para las categorías de IVA 1 y 2), planilla abierta, punto de venta y número (`NUMERACION/PV`). |
+| `POST presupuesto` | Cabecera (`Remitar = Facturar = Pendiente = 1`), observación, vencimiento a 30 días y cada línea con su saldo pendiente (`Total = Saldo = cantidad`, `Saldo2 = 0`). **No mueve stock ni cta. cte.**: lo hace el remito o la factura que lo consuma. |
+| `PUT presupuesto/{id}` | Cabecera (cliente, datos impresos, totales, observación) y reemplazo de todas las líneas y sus saldos. Letra, número, fecha y sucursal no cambian. |
+| `POST presupuesto/{id}/anular` | Baja de las líneas (libro IVA BAJA), saldos en 0 y comprobante ANULADO. |
+
+Para remitirlo o facturarlo: `GET {id}/lineas-pendientes` y esas líneas (con su `relacion`) en `POST remito` o `POST interno` / `electronica`.
+
+Diferencias **intencionales** con el ERP:
+- **Modificar y anular solo en GENERADO y sin nada remitido ni facturado** (409). El ERP no validaba nada al modificar: borraba las
+  líneas y saldos aunque un remito o una factura ya los hubiera consumido, dejando esas relaciones apuntando a líneas inexistentes.
+- Al anular se ponen en 0 los saldos (el ERP los dejaba pendientes y seguían apareciendo como líneas para remitir/facturar).
+- Letra, planilla y número los resuelve el servidor; si el cliente cambia, se bloquean ambos clientes.
+- Cada línea graba su propio `Otros` (en el alta el ERP grababa el de la cabecera; en la modificación ya usaba el de la línea).
+
+Se mantiene del ERP: la observación completa va a `DocumentosClienteObservaciones` solo en el alta (la modificación actualiza la
+de la cabecera, truncada a 50); clientes de categorías de IVA sin letra configurada no pueden tener presupuestos (400 con mensaje claro).
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: presupuestos, órdenes de pago,
+transaccionales: órdenes de pago,
 compras y facturas de proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación
 bancaria y alta de usuarios (Membership).

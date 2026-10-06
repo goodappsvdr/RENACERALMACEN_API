@@ -1,4 +1,5 @@
 using API.DA.DbContexts;
+using API.SERVICE.Interfaces.Ventas;
 using API.SERVICE.Repositories.Ventas;
 using API.TESTS.Infrastructure;
 using FluentAssertions;
@@ -118,6 +119,20 @@ public class VentaQueriesTranslationTests
         _interceptor.Commands.ElementAt(1).Should().Contain("FROM [DocumentosClienteRemitos]").And.Contain("[ID_Remito] = @");
         _interceptor.Commands.ElementAt(2).Should().Contain("[Remitar] = CAST(1 AS bit)").And.Contain("NOT IN").And.Contain("OPENJSON");
         LastSql.Should().Contain("INNER JOIN [DocumentosClienteDetalle]").And.Contain("<> 0.0");
+    }
+
+    [Fact]
+    public async Task Presupuestos_TraducenASql()
+    {
+        await _repo.ModificarPresupuestoAsync(381, new PresupuestoCabeceraRow(5, "CLIENTE", 1, "20123456789", 1, 2, "CALLE", 100, 21, 0, 121, "OBS"));
+        await _repo.BorrarDetallesAsync(381);
+        await _repo.BorrarMovimientosStockAsync(381, 1);
+
+        _interceptor.Commands.Should().HaveCount(3);
+        _interceptor.Commands.ElementAt(0).Should().StartWith("UPDATE").And.Contain("[TotalGeneral] = @").And.Contain("[ID_Cliente] = @")
+            .And.NotContain("[Numero]", "el SP no toca número ni letra");
+        _interceptor.Commands.ElementAt(1).Should().StartWith("DELETE").And.Contain("[DocumentosClienteDetalle]");
+        LastSql.Should().StartWith("DELETE").And.Contain("[EntidadesCtaCteStockMovimientosDetalle]").And.Contain("[ID_ComprobanteTipo] = @");
     }
 
     [Fact]

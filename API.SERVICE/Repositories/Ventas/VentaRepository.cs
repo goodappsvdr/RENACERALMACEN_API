@@ -258,6 +258,33 @@ public sealed class VentaRepository : IVentaRepository
          select new LineaPendienteRow(d, s.IdComprobanteTipo!.Value, s.Saldo ?? 0m))
         .ToListAsync(cancellationToken);
 
+    // ---------- Presupuestos ----------
+
+    public Task ModificarPresupuestoAsync(int idDocumentoCliente, PresupuestoCabeceraRow datos, CancellationToken cancellationToken = default) =>
+        _context.DocumentosCliente
+            .Where(d => d.IdDocumentoCliente == idDocumentoCliente)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.IdCliente, datos.IdCliente)
+                .SetProperty(d => d.RazonSocial, datos.RazonSocial)
+                .SetProperty(d => d.IdCategoriaIva, datos.IdCategoriaIva)
+                .SetProperty(d => d.NroDoc, datos.NroDoc)
+                .SetProperty(d => d.IdProvincia, datos.IdProvincia)
+                .SetProperty(d => d.IdLocalidad, datos.IdLocalidad)
+                .SetProperty(d => d.Calle, datos.Calle)
+                .SetProperty(d => d.TotalNeto, datos.Neto)
+                .SetProperty(d => d.TotalIva, datos.Iva)
+                .SetProperty(d => d.TotalOtrosImpuestos, datos.Otros)
+                .SetProperty(d => d.TotalGeneral, datos.Total)
+                .SetProperty(d => d.Observaciones, datos.Observaciones), cancellationToken);
+
+    public Task BorrarDetallesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default) =>
+        _context.DocumentosClienteDetalle.Where(d => d.IdDocumentoCliente == idDocumentoCliente).ExecuteDeleteAsync(cancellationToken);
+
+    public Task BorrarMovimientosStockAsync(int idComprobante, int idComprobanteTipo, CancellationToken cancellationToken = default) =>
+        _context.EntidadesCtaCteStockMovimientosDetalle
+            .Where(s => s.IdComprobante == idComprobante && s.IdComprobanteTipo == idComprobanteTipo)
+            .ExecuteDeleteAsync(cancellationToken);
+
     public async Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
     {
         var recurso = $"elrenacer:afip:documento:{idDocumentoCliente}";

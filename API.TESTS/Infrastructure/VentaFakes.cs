@@ -180,6 +180,29 @@ public sealed class FakeVentaRepository(FakeReciboCobroRepository recibos) : IVe
     public Task<List<LineaPendienteRow>> GetLineasPendientesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default) =>
         Task.FromResult(LineasPendientes.GetValueOrDefault(idDocumentoCliente) ?? []);
 
+    // ---------- Presupuestos ----------
+
+    public Task ModificarPresupuestoAsync(int idDocumentoCliente, PresupuestoCabeceraRow datos, CancellationToken cancellationToken = default)
+    {
+        if (Documentos.GetValueOrDefault(idDocumentoCliente) is { } doc)
+        {
+            doc.IdCliente = datos.IdCliente;
+            doc.RazonSocial = datos.RazonSocial;
+            doc.TotalGeneral = datos.Total;
+            doc.Observaciones = datos.Observaciones;
+        }
+        return Op($"ModificarPresupuesto {idDocumentoCliente} cliente={datos.IdCliente} total={datos.Total:0.##}");
+    }
+
+    public Task BorrarDetallesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
+    {
+        Detalles.RemoveAll(d => d.IdDocumentoCliente == idDocumentoCliente);
+        return Op($"BorrarDetalles {idDocumentoCliente}");
+    }
+
+    public Task BorrarMovimientosStockAsync(int idComprobante, int idComprobanteTipo, CancellationToken cancellationToken = default) =>
+        Op($"BorrarMovimientosStock {idComprobante}/{idComprobanteTipo}");
+
     public Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
     {
         Operaciones.Add($"BloquearAutorizacion {idDocumentoCliente}");
