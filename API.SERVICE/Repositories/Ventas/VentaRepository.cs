@@ -193,6 +193,36 @@ public sealed class VentaRepository : IVentaRepository
             .OrderBy(d => d.IdDocumentoCliente)
             .ToListAsync(cancellationToken);
 
+    // ---------- Nota de crédito ----------
+
+    public Task<List<int>> GetRecibosImputadosAsync(int idDocumentoCliente, int idComprobanteTipo, CancellationToken cancellationToken = default) =>
+        _context.EntidadRecibosDocumentosCliente.AsNoTracking()
+            .Where(i => i.IdDocumentoCliente == idDocumentoCliente && i.IdComprobanteTipo == idComprobanteTipo && i.IdEntidadRecibo != null)
+            .OrderBy(i => i.IdEntidadReciboDocumentoCliente)
+            .Select(i => i.IdEntidadRecibo!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+    public async Task<decimal> GetTotalNotasCreditoAsync(int idFactura, int idTipoNotaCredito, int estadoAnulado, int excluirId, CancellationToken cancellationToken = default) =>
+        await (from r in _context.DocumentosClienteRelacion
+               join nc in _context.DocumentosCliente on r.IdDocumentoCliente2 equals nc.IdDocumentoCliente
+               where r.IdDocumentoCliente1 == idFactura && nc.IdComprobanteTipo == idTipoNotaCredito
+                     && nc.Estado != estadoAnulado && nc.IdDocumentoCliente != excluirId
+               select nc.TotalGeneral)
+            .SumAsync(cancellationToken) ?? 0m;
+
+    public Task<int?> GetFacturaDeNotaCreditoAsync(int idNotaCredito, CancellationToken cancellationToken = default) =>
+        _context.DocumentosClienteRelacion.AsNoTracking()
+            .Where(r => r.IdDocumentoCliente2 == idNotaCredito)
+            .OrderBy(r => r.IdDocumentoClienteRelacion)
+            .Select(r => r.IdDocumentoCliente1)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task BorrarRelacionAsync(int idFactura, int idNotaCredito, CancellationToken cancellationToken = default) =>
+        _context.DocumentosClienteRelacion
+            .Where(r => r.IdDocumentoCliente1 == idFactura && r.IdDocumentoCliente2 == idNotaCredito)
+            .ExecuteDeleteAsync(cancellationToken);
+
     public async Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
     {
         var recurso = $"elrenacer:afip:documento:{idDocumentoCliente}";

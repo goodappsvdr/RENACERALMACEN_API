@@ -15,11 +15,13 @@ public sealed record EmisorFactura(AfipEmisor Afip, int CbteTipo, bool Responsab
 
 internal static class FacturaElectronicaContexto
 {
+    /// <param name="clase"><see cref="AfipRules.Factura"/> o <see cref="AfipRules.NotaCredito"/>.</param>
     public static async Task<EmisorFactura> ResolverAsync(
-        IVentaRepository ventas, IReferenciasRepository referencias, int idSucursal, string letra, CancellationToken ct)
+        IVentaRepository ventas, IReferenciasRepository referencias, int idSucursal, string letra, CancellationToken ct, string clase = AfipRules.Factura)
     {
-        if (!AfipRules.ParametroPorLetra.TryGetValue(letra, out var parametroTipo))
+        if (!AfipRules.Letras.Contains(letra))
             throw new BusinessException($"No es posible determinar el tipo de comprobante para la letra {letra}.");
+        var parametroTipo = $"{clase} {letra}";
 
         var sucursal = await ventas.GetSucursalAsync(idSucursal, ct)
             ?? throw new NotFoundException($"Sucursal {idSucursal} no existe.");
@@ -178,7 +180,7 @@ public interface IGetFacturasPendientesAfipUseCase
     Task<IReadOnlyList<DocumentoClienteDisplay>> ExecuteAsync(CancellationToken cancellationToken = default);
 }
 
-/// <summary>Facturas electrónicas grabadas que todavía no tienen CAE (AFIP no respondió al emitirlas).</summary>
+/// <summary>Facturas y notas de crédito electrónicas grabadas que todavía no tienen CAE (AFIP no respondió al emitirlas).</summary>
 public sealed class GetFacturasPendientesAfipUseCase : IGetFacturasPendientesAfipUseCase
 {
     private readonly IVentaRepository _ventas;
@@ -193,7 +195,10 @@ public sealed class GetFacturasPendientesAfipUseCase : IGetFacturasPendientesAfi
     public async Task<IReadOnlyList<DocumentoClienteDisplay>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
         var fv = await _referencias.GetParametroEnteroAsync("COMPROBANTE", "FV", cancellationToken);
+        var nc = await _referencias.GetParametroEnteroAsync("COMPROBANTE", "NC", cancellationToken);
         var anulado = await _referencias.GetIdEstadoAsync("DOCUMENTOSCLIENTE", "ANULADO", cancellationToken);
-        return (await _ventas.GetPendientesAfipAsync(fv, anulado, cancellationToken)).Select(d => d.ToDisplay()).ToList();
+        var facturas = await _ventas.GetPendientesAfipAsync(fv, anulado, cancellationToken);
+        var notasCredito = await _ventas.GetPendientesAfipAsync(nc, anulado, cancellationToken);
+        return facturas.Concat(notasCredito).Select(d => d.ToDisplay()).ToList();
     }
 }

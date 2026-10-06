@@ -96,6 +96,19 @@ public interface IVentaRepository
     /// <summary>Facturas del tipo indicado todavía sin CAE (CAE = "0") y no anuladas.</summary>
     Task<List<Db.DocumentosCliente>> GetPendientesAfipAsync(int idComprobanteTipo, int estadoAnulado, CancellationToken cancellationToken = default);
 
+    // ---------- Nota de crédito ----------
+
+    /// <summary>Todos los recibos que imputaron al comprobante (EntidadRecibosDocumentosCliente_BuscarPorID_DocumentoCliente_ComprobanteTipo).</summary>
+    Task<List<int>> GetRecibosImputadosAsync(int idDocumentoCliente, int idComprobanteTipo, CancellationToken cancellationToken = default);
+
+    /// <summary>Total de notas de crédito no anuladas ya relacionadas a la factura (DocumentosClienteRelacion), sin contar <paramref name="excluirId"/>.</summary>
+    Task<decimal> GetTotalNotasCreditoAsync(int idFactura, int idTipoNotaCredito, int estadoAnulado, int excluirId, CancellationToken cancellationToken = default);
+
+    /// <summary>Factura que acredita la nota de crédito (DocumentosClienteRelacion: ID_DocumentoCliente1 = factura, 2 = NC).</summary>
+    Task<int?> GetFacturaDeNotaCreditoAsync(int idNotaCredito, CancellationToken cancellationToken = default);
+
+    Task BorrarRelacionAsync(int idFactura, int idNotaCredito, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Lock exclusivo de la factura mientras se pide el CAE (sp_getapplock de sesión: dura lo que dura la llamada a AFIP,
     /// que va fuera de toda transacción). Si otro request ya la está autorizando, lanza ConflictException.

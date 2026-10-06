@@ -9,12 +9,22 @@ namespace API.SERVICE.Domain.Afip;
 /// <summary>Reglas de la factura electrónica, tal como las aplica FrmFacturasAFIP (Agregar_Ws y ModuloPrincipal).</summary>
 public static class AfipRules
 {
-    /// <summary>Letras admitidas y el parámetro AFIP/* con su código de comprobante.</summary>
-    public static readonly IReadOnlyDictionary<string, string> ParametroPorLetra = new Dictionary<string, string>
+    /// <summary>Letras de comprobante electrónico admitidas.</summary>
+    public static readonly IReadOnlySet<string> Letras = new HashSet<string> { "A", "B", "C" };
+
+    /// <summary>Clase de comprobante: arma el nombre del parámetro AFIP/* con su código ("FACTURA A", "NC B", ...).</summary>
+    public const string Factura = "FACTURA";
+    public const string NotaCredito = "NC";
+
+    /// <summary>
+    /// Tipo AFIP de una factura según su letra, como lo calcula DocumentosCliente_BuscarPorID (columna TipoAfip):
+    /// A → 1, C → 11, cualquier otra → 6. Se usa para el comprobante asociado de la nota de crédito.
+    /// </summary>
+    public static int TipoAfipFactura(string? letra) => letra switch
     {
-        ["A"] = "FACTURA A",
-        ["B"] = "FACTURA B",
-        ["C"] = "FACTURA C",
+        "A" => 1,
+        "C" => 11,
+        _ => 6,
     };
 
     /// <summary>Marca de "sin CAE" con la que el ERP crea el comprobante; hasta que AFIP lo autoriza queda así.</summary>

@@ -67,6 +67,33 @@ public class IdeasAfipGatewayTests
     }
 
     [Theory]
+    [InlineData(false, "/api/GenerateVoucherCbteAsoc")]
+    [InlineData(true, "/api/GenerateVoucherCbteAsocMono")]
+    public async Task SolicitarCae_ConComprobanteAsociado_VaAlEndpointCbteAsocYLoEnvia(bool monotributo, string endpoint)
+    {
+        var handler = new Handler("""{ "FeDetRespModel": { "CAE": "71234567890123", "CbteDesde": 9, "Resultado": "A" } }""");
+
+        await Sut(handler).SolicitarCaeAsync(Solicitud(monotributo) with { ComprobantesAsociados = [new AfipComprobanteAsociado(1, 2, 77)] });
+
+        handler.Path.Should().Be(endpoint);
+        var asociado = handler.Body!["CbteAsocs"]!.AsArray().Single()!;
+        asociado["Tipo"]!.GetValue<int>().Should().Be(1);
+        asociado["PtoVta"]!.GetValue<int>().Should().Be(2);
+        asociado["Nro"]!.GetValue<long>().Should().Be(77);
+        (handler.Body!["AlicIvas"] is null).Should().Be(monotributo);
+    }
+
+    [Fact]
+    public async Task SolicitarCae_SinAsociados_NoEnviaCbteAsocs()
+    {
+        var handler = new Handler("""{ "FeDetRespModel": { "CAE": "71234567890123", "CbteDesde": 9, "Resultado": "A" } }""");
+
+        await Sut(handler).SolicitarCaeAsync(Solicitud(false));
+
+        handler.Body!["CbteAsocs"].Should().BeNull();
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.InternalServerError, "{}")]
     [InlineData(HttpStatusCode.OK, "esto no es json")]
     [InlineData(HttpStatusCode.OK, """{ "otra": "cosa" }""")]

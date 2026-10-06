@@ -291,9 +291,43 @@ para emitir facturas reales hay que ponerlo en true explícitamente) y `TimeoutS
 **Sin probar contra AFIP:** el cliente del gateway está probado con un HTTP simulado que reproduce los JSON de `API_GA_AFIP.vb`.
 Falta validarlo en homologación (formato de fechas: el ERP mandaba `/Date(...)/` y acá va ISO 8601).
 
+### Nota de crédito electrónica — NC (`/api/DocumentoCliente`)
+
+Port de `Agregar_Ws` / `IniciarPuntoVenta_WS` (`FrmNotasCreditoAFIP`). Se hace siempre sobre una factura FV autorizada; la letra,
+la sucursal y el cliente salen de la factura.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET {idFactura}/nota-credito/nuevo` | Planilla abierta, punto de venta AFIP y próximo número de NC según AFIP. |
+| `POST nota-credito` | **Fase 1:** graba el borrador (cabecera, detalle y relación factura → NC en `DocumentosClienteRelacion`) con `CAE = "0"` y **sin efectos**. **Fase 2:** pide el CAE con la factura como comprobante asociado (`GenerateVoucherCbteAsoc` / `GenerateVoucherCbteAsocMono`) y, si AFIP aprueba, aplica los efectos. 201 · 202 · 422 · 503 como la factura. |
+| `POST {id}/autorizar` | El mismo endpoint de la factura: según el tipo del comprobante reintenta la FV o la NC. |
+| `GET electronica/pendientes` | Incluye las NC pendientes. |
+
+Cada línea referencia una línea de la factura (`idDocumentoClienteDetalle`): ítem, descripción, impuesto y lista salen de ella; cantidad e
+importes vienen en el request (como en el ERP).
+
+Efectos al aprobar (misma transacción que el CAE): si la factura vino de remitos/presupuestos se les devuelve el saldo; si no, se suma
+el stock de cada línea, se registra el movimiento y se descuenta el saldo de la línea de la factura. Cta. cte. de la NC a favor del cliente
+(saldo y `Total2` negativos, vencimiento a 30 días) con su movimiento. Si la factura se había cobrado con recibos, **se anulan esos
+recibos** (como el ERP); si no, la factura pasa a CANCELADO. Se liberan los números de serie de la factura. Libro de IVA ventas como NC
+si la sucursal es RI; QR y código de barras (con la fecha de emisión, como el ERP).
+
+Diferencias **intencionales** con el ERP:
+- **Los efectos se aplican recién con el CAE.** El ERP los aplicaba antes de llamar a AFIP con la transacción abierta; como incluyen
+  anular recibos (que no se puede deshacer limpiamente), acá un rechazo solo anula el borrador y lo desvincula de la factura.
+- **Validaciones nuevas en el servidor:** la factura tiene que ser FV, no anulada y con CAE; cada línea tiene que ser de esa factura y
+  no acreditar más cantidad que la facturada; el total de la NC más las NC previas no puede superar el total de la factura. Lo previo
+  se lee bajo el lock del cliente, así que dos NC simultáneas no pueden pasarse.
+- El IVA de la NC se agrupa sin descuento global (las NC no tienen recargo/descuento: se graban en 0, como el ERP).
+
+Comportamientos del ERP que se **mantienen** y conviene revisar con negocio:
+- `DocumentosCliente.Porcentaje` de la NC guarda el **total de envases**.
+- Anular los recibos de la factura deja anulado **todo** el recibo aunque haya imputado a otros comprobantes o la NC sea parcial.
+- Con NC parcial sin recibos la factura igual pasa a CANCELADO.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: notas de crédito electrónicas (AFIP, con comprobante asociado), remitos, presupuestos, órdenes de pago,
+transaccionales: remitos, presupuestos, órdenes de pago,
 compras y facturas de proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación
 bancaria y alta de usuarios (Membership).

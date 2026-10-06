@@ -90,6 +90,22 @@ public class VentaQueriesTranslationTests
     }
 
     [Fact]
+    public async Task NotaCredito_TraducenASql()
+    {
+        await _repo.GetRecibosImputadosAsync(800, 3);
+        var total = async () => await _repo.GetTotalNotasCreditoAsync(800, 4, 99, 0);
+        await total.Should().ThrowAsync<InvalidOperationException>("el lector vacío no trae la fila del SUM");
+        await _repo.GetFacturaDeNotaCreditoAsync(900);
+        await _repo.BorrarRelacionAsync(800, 900);
+
+        _interceptor.Commands.Should().HaveCount(4);
+        _interceptor.Commands.ElementAt(0).Should().Contain("DISTINCT").And.Contain("FROM [EntidadRecibosDocumentosCliente]");
+        _interceptor.Commands.ElementAt(1).Should().Contain("SUM(").And.Contain("INNER JOIN [DocumentosCliente]");
+        _interceptor.Commands.ElementAt(2).Should().Contain("TOP(1)").And.Contain("FROM [DocumentosClienteRelacion]");
+        LastSql.Should().StartWith("DELETE").And.Contain("[DocumentosClienteRelacion]");
+    }
+
+    [Fact]
     public async Task BloquearAutorizacion_UsaAppLockDeSesionYLoLibera()
     {
         await using (await _repo.BloquearAutorizacionAsync(800))

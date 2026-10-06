@@ -140,6 +140,26 @@ public sealed class FakeVentaRepository(FakeReciboCobroRepository recibos) : IVe
     public Task<List<DocumentosCliente>> GetPendientesAfipAsync(int idComprobanteTipo, int estadoAnulado, CancellationToken cancellationToken = default) =>
         Task.FromResult(Documentos.Values.Where(d => d.IdComprobanteTipo == idComprobanteTipo && d.Cae == "0" && d.Estado != estadoAnulado).ToList());
 
+    // ---------- Nota de crédito ----------
+
+    public List<int> RecibosImputados { get; } = [];
+    public decimal TotalNotasCreditoPrevias { get; set; }
+
+    public Task<List<int>> GetRecibosImputadosAsync(int idDocumentoCliente, int idComprobanteTipo, CancellationToken cancellationToken = default) =>
+        Task.FromResult(RecibosImputados.ToList());
+
+    public Task<decimal> GetTotalNotasCreditoAsync(int idFactura, int idTipoNotaCredito, int estadoAnulado, int excluirId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(TotalNotasCreditoPrevias);
+
+    public Task<int?> GetFacturaDeNotaCreditoAsync(int idNotaCredito, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Added.OfType<DocumentosClienteRelacion>().LastOrDefault(r => r.IdDocumentoCliente2 == idNotaCredito)?.IdDocumentoCliente1);
+
+    public Task BorrarRelacionAsync(int idFactura, int idNotaCredito, CancellationToken cancellationToken = default)
+    {
+        Added.RemoveAll(e => e is DocumentosClienteRelacion r && r.IdDocumentoCliente1 == idFactura && r.IdDocumentoCliente2 == idNotaCredito);
+        return Op($"BorrarRelacion {idFactura}/{idNotaCredito}");
+    }
+
     public Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
     {
         Operaciones.Add($"BloquearAutorizacion {idDocumentoCliente}");

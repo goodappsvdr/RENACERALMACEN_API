@@ -17,6 +17,15 @@ public interface IVentaAnulador
     /// </summary>
     /// <param name="prefijoConcepto">"VEN" / "FV", para el concepto de los movimientos de stock.</param>
     Task AnularAsync(Db.DocumentosCliente doc, string prefijoConcepto, int idUsuario, DateTime ahora, CancellationToken ct);
+
+    /// <summary>
+    /// Si el comprobante facturó remitos/presupuestos, les devuelve el saldo (y el stock de lo presupuestado) y los libera.
+    /// Devuelve false si no tenía remitos asociados. Lo usa también la nota de crédito sobre su factura.
+    /// </summary>
+    Task<bool> RevertirRemitosAsync(Db.DocumentosCliente doc, int idUsuario, DateTime ahora, CancellationToken ct);
+
+    /// <summary>Anula un recibo entero: estado, detalle, caja, cheques, bancos, retenciones y su cta. cte. (AnularRecibo de FrmFacturas).</summary>
+    Task AnularReciboAsync(int idRecibo, DateTime ahora, CancellationToken ct);
 }
 
 /// <summary>Port de Editar_Ws + AnularRecibo (FrmFacturas). Lo usan la anulación del interno y el rechazo de AFIP.</summary>
@@ -68,6 +77,19 @@ public sealed class VentaAnulador : IVentaAnulador
         await _ventas.LiberarNrosSerieAsync(ven, idDocumentoCliente, await _referencias.GetIdEstadoAsync("ITEMSNROSERIE", "DISPONIBLE", ct), ct);
         await _ventas.AnularDocumentoAsync(idDocumentoCliente, await _referencias.GetIdEstadoAsync("DOCUMENTOSCLIENTE", "ANULADO", ct), ahora, ct);
     }
+
+    public async Task<bool> RevertirRemitosAsync(Db.DocumentosCliente doc, int idUsuario, DateTime ahora, CancellationToken ct)
+    {
+        var remitos = await _ventas.GetRemitosAsociadosAsync(doc.IdDocumentoCliente, ct);
+        if (remitos.Count == 0)
+            return false;
+
+        await RevertirRelacionadosAsync(doc, remitos, doc.IdComprobanteTipo ?? 0, idUsuario, ahora, ct);
+        return true;
+    }
+
+    public async Task AnularReciboAsync(int idRecibo, DateTime ahora, CancellationToken ct) =>
+        await AnularReciboAsync(idRecibo, await _referencias.IdAsync(EstadosCobranza.CtaCteAnulado, ct), ahora, ct);
 
     private async Task RevertirRelacionadosAsync(Db.DocumentosCliente doc, List<Db.DocumentosClienteRemitos> remitos, int ven, int idUsuario, DateTime ahora, CancellationToken ct)
     {

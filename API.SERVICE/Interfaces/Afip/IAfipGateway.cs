@@ -38,7 +38,14 @@ public sealed record AfipSolicitudCae(
     decimal ImpTotal,
     DateTime FechaServDesde,
     DateTime FechaServHasta,
-    IReadOnlyList<AfipAlicuota> Alicuotas);
+    IReadOnlyList<AfipAlicuota> Alicuotas)
+{
+    /// <summary>Comprobantes asociados (la factura que acredita una nota de crédito). Vacío para facturas.</summary>
+    public IReadOnlyList<AfipComprobanteAsociado> ComprobantesAsociados { get; init; } = [];
+}
+
+/// <summary>Comprobante asociado (CbteAsoc): tipo AFIP, punto de venta y número de la factura.</summary>
+public sealed record AfipComprobanteAsociado(int Tipo, int PuntoVenta, long Numero);
 
 /// <param name="Id">Código de alícuota de AFIP: 5 = 21 %, 4 = 10,5 %, 6 = 27 %.</param>
 public sealed record AfipAlicuota(int Id, decimal BaseImponible, decimal Importe);

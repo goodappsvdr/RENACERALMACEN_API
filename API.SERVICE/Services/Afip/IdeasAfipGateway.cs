@@ -81,17 +81,28 @@ public sealed class IdeasAfipGateway : IAfipGateway
         };
         var cliente = new { s.Emisor.Cuit, PtoVta = s.Emisor.PuntoVenta, s.CbteTipo, CantReg = 1 };
 
-        object body = s.Monotributo
-            ? new { LoginCmsModel = Login(s.Emisor), WsfeClientModel = cliente, CaeDetRequestModel = caeDet }
-            : new
-            {
-                LoginCmsModel = Login(s.Emisor),
-                WsfeClientModel = cliente,
-                CaeDetRequestModel = caeDet,
-                AlicIvas = s.Alicuotas.Select(a => new { a.Id, BaseImp = a.BaseImponible, a.Importe }).ToList(),
-            };
+        // Mismos endpoints que el ERP: con comprobante asociado (notas de crédito) van a ...CbteAsoc.
+        var conAsociado = s.ComprobantesAsociados.Count > 0;
+        var asociados = s.ComprobantesAsociados.Select(a => new { a.Tipo, PtoVta = a.PuntoVenta, Nro = a.Numero }).ToList();
+        var alicuotas = s.Alicuotas.Select(a => new { a.Id, BaseImp = a.BaseImponible, a.Importe }).ToList();
+        var login = Login(s.Emisor);
 
-        var json = await PostAsync(s.Monotributo ? "GenerateVoucherMono" : "GenerateVoucher", body, cancellationToken);
+        object body = (s.Monotributo, conAsociado) switch
+        {
+            (true, false) => new { LoginCmsModel = login, WsfeClientModel = cliente, CaeDetRequestModel = caeDet },
+            (true, true) => new { LoginCmsModel = login, WsfeClientModel = cliente, CaeDetRequestModel = caeDet, CbteAsocs = asociados },
+            (false, false) => new { LoginCmsModel = login, WsfeClientModel = cliente, CaeDetRequestModel = caeDet, AlicIvas = alicuotas },
+            (false, true) => new { LoginCmsModel = login, WsfeClientModel = cliente, CaeDetRequestModel = caeDet, AlicIvas = alicuotas, CbteAsocs = asociados },
+        };
+        var endpoint = (s.Monotributo, conAsociado) switch
+        {
+            (true, false) => "GenerateVoucherMono",
+            (true, true) => "GenerateVoucherCbteAsocMono",
+            (false, false) => "GenerateVoucher",
+            (false, true) => "GenerateVoucherCbteAsoc",
+        };
+
+        var json = await PostAsync(endpoint, body, cancellationToken);
         var det = json?["FeDetRespModel"]
             ?? throw new AfipNoDisponibleException("La respuesta de AFIP no tiene el detalle del comprobante.");
 
