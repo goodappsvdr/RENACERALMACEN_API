@@ -223,6 +223,41 @@ public sealed class VentaRepository : IVentaRepository
             .Where(r => r.IdDocumentoCliente1 == idFactura && r.IdDocumentoCliente2 == idNotaCredito)
             .ExecuteDeleteAsync(cancellationToken);
 
+    // ---------- Remitos ----------
+
+    public Task<string?> GetLetraAsync(int idComprobanteTipo, int idCategoriaIvaCliente, CancellationToken cancellationToken = default) =>
+        _context.ComprobantesLetras.AsNoTracking()
+            .Where(l => l.IdComprobanteTipo == idComprobanteTipo && l.IdCategoriaIvacliente == idCategoriaIvaCliente && l.IdCategoriaIvaproveedor == 1)
+            .OrderBy(l => l.IdComprobanteLetra)
+            .Select(l => l.Letra)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<List<Db.DocumentosClienteRemitos>> GetRelacionesComoRemitoAsync(int idRemito, CancellationToken cancellationToken = default) =>
+        _context.DocumentosClienteRemitos.AsNoTracking()
+            .Where(r => r.IdRemito == idRemito)
+            .OrderBy(r => r.IdDocumentoClienteRemito)
+            .ToListAsync(cancellationToken);
+
+    public Task<List<Db.DocumentosCliente>> GetComprobantesParaRemitirAsync(
+        int idEntidad, IReadOnlyCollection<int> tipos, IReadOnlyCollection<int> estadosExcluidos, CancellationToken cancellationToken = default) =>
+        _context.DocumentosCliente.AsNoTracking()
+            .Where(d => d.IdCliente == idEntidad && tipos.Contains(d.IdComprobanteTipo!.Value) && d.Remitar == true && d.Pendiente == true
+                        && !estadosExcluidos.Contains(d.Estado!.Value))
+            .OrderByDescending(d => d.IdDocumentoCliente)
+            .ToListAsync(cancellationToken);
+
+    public Task<List<LineaPendienteRow>> GetLineasPendientesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default) =>
+        (from s in _context.EntidadesCtaCteStockMovimientosDetalle.AsNoTracking()
+         join d in _context.DocumentosClienteDetalle.AsNoTracking()
+             on new { Doc = (long?)s.IdComprobante, Det = (long?)s.IdComprobanteDetalle }
+             equals new { Doc = d.IdDocumentoCliente, Det = (long?)d.IdDocumentoClienteDetalle }
+         where s.IdComprobante == idDocumentoCliente
+               && VentaRules.TiposConStockPendiente.Contains(s.IdComprobanteTipo!.Value)
+               && s.Saldo != 0
+         orderby d.IdDocumentoClienteDetalle
+         select new LineaPendienteRow(d, s.IdComprobanteTipo!.Value, s.Saldo ?? 0m))
+        .ToListAsync(cancellationToken);
+
     public async Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
     {
         var recurso = $"elrenacer:afip:documento:{idDocumentoCliente}";

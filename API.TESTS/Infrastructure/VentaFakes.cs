@@ -160,6 +160,26 @@ public sealed class FakeVentaRepository(FakeReciboCobroRepository recibos) : IVe
         return Op($"BorrarRelacion {idFactura}/{idNotaCredito}");
     }
 
+    // ---------- Remitos ----------
+
+    public string? Letra { get; set; } = "R";
+    public Dictionary<int, List<LineaPendienteRow>> LineasPendientes { get; } = [];
+
+    public Task<string?> GetLetraAsync(int idComprobanteTipo, int idCategoriaIvaCliente, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Letra);
+
+    public Task<List<DocumentosClienteRemitos>> GetRelacionesComoRemitoAsync(int idRemito, CancellationToken cancellationToken = default) =>
+        Task.FromResult(RemitosAsociados.Where(r => r.IdRemito == idRemito).ToList());
+
+    public Task<List<DocumentosCliente>> GetComprobantesParaRemitirAsync(
+        int idEntidad, IReadOnlyCollection<int> tipos, IReadOnlyCollection<int> estadosExcluidos, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Documentos.Values
+            .Where(d => d.IdCliente == idEntidad && tipos.Contains(d.IdComprobanteTipo ?? 0) && d.Remitar == true && d.Pendiente == true && !estadosExcluidos.Contains(d.Estado ?? 0))
+            .OrderByDescending(d => d.IdDocumentoCliente).ToList());
+
+    public Task<List<LineaPendienteRow>> GetLineasPendientesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default) =>
+        Task.FromResult(LineasPendientes.GetValueOrDefault(idDocumentoCliente) ?? []);
+
     public Task<IAsyncDisposable> BloquearAutorizacionAsync(int idDocumentoCliente, CancellationToken cancellationToken = default)
     {
         Operaciones.Add($"BloquearAutorizacion {idDocumentoCliente}");

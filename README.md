@@ -325,9 +325,47 @@ Comportamientos del ERP que se **mantienen** y conviene revisar con negocio:
 - Anular los recibos de la factura deja anulado **todo** el recibo aunque haya imputado a otros comprobantes o la NC sea parcial.
 - Con NC parcial sin recibos la factura igual pasa a CANCELADO.
 
+### Remitos de venta — RV (`/api/DocumentoCliente`)
+
+Port de `Agregar_Ws` / `Editar_Ws` / `IniciarPuntoVenta_WS` / `BuscarComprobantes_WS` / `BuscarRemito_PorID_Remito_Seleccionar_Ws` (`FrmRemitos`).
+**Sin uso en producción** al portarlo (0 remitos y 0 relaciones en la base; el cliente usa solo VEN): se portó para cerrar el
+circuito presupuesto → remito → factura, que el VEN y la FV ya consumen.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET remito/nuevo?idEntidad=` | Letra (`ComprobantesLetras` según la categoría de IVA del cliente: hoy siempre R), planilla abierta, punto de venta y número sugerido. |
+| `GET remito/comprobantes-pendientes?idEntidad=` | Presupuestos, internos y facturas del cliente con `Remitar = 1`, `Pendiente = 1`, no anulados ni cancelados. |
+| `GET {id}/lineas-pendientes` | Líneas del comprobante con saldo pendiente y su `relacion`, listas para un remito **o una factura** (sirve también para facturar remitos/presupuestos). |
+| `POST remito` | Alta (ver abajo). |
+| `POST remito/{id}/anular` | Anulación (ver abajo). |
+
+Alta, por línea como el ERP: **directa** → descuenta stock y queda con saldo para facturar; **de un presupuesto** → consume su saldo,
+descuenta stock y queda para facturar; **de un interno/factura** → solo consume su saldo (el stock lo movió la venta). Cada comprobante
+entregado queda ENTREGADO o ENTREGADO PARCIAL (con `Pendiente`) y se relaciona en `DocumentosClienteRemitos`
+(`ID_DocumentoCliente` = entregado, `ID_Remito` = remito). El remito directo o de presupuesto queda `Facturar = 1, Pendiente = 1`.
+
+Anulación: devuelve el saldo a los comprobantes entregados (GENERADO si no les queda nada entregado, si no ENTREGADO PARCIAL),
+devuelve el stock de las líneas directas y de presupuesto, anula los movimientos de stock, libera números de serie y anula el remito.
+
+Diferencias **intencionales** con el ERP:
+- **Validaciones nuevas en el servidor** (bajo el lock del cliente): los comprobantes entregados tienen que ser del cliente y estar pendientes
+  de remitir (409 si no); cada línea relacionada tiene que ser de uno de ellos, del mismo ítem y sin superar su saldo; cada comprobante
+  informado tiene que entregar alguna línea. El tipo del comprobante relacionado lo toma el servidor (no el request).
+- Letra, planilla y número los resuelve el servidor (`UPDATE ... OUTPUT`).
+- **Remito facturado no se anula** (409). `DocumentosClienteRemitos` guarda con `ID_Remito` = remito también las facturas que lo facturaron;
+  el ERP permitía anular en estado FACTURADO y las trataba como comprobantes entregados (les cambiaba el estado y borraba la relación).
+- Remito con líneas directas **y** relacionadas: el ERP no devolvía el stock de las directas al anular; acá sí. Tampoco usa más
+  la cabecera indexada por línea (`ods22.Rows(i)`) para el movimiento de stock.
+- `ComprobantesCarga`: el SP del ERP grababa el `ID_Usuario` en `ID_Comprobante`; acá se graba el remito.
+- Cada línea graba su propio `Otros` (el ERP grababa el de la cabecera).
+- Observaciones de más de 50 caracteres se rechazan (el SP las recibe en varchar(50) y el remito no usa `DocumentosClienteObservaciones`).
+
+Se mantiene del ERP y conviene revisar con negocio: transporte, chofer y unidad se graban vacíos (el ERP los tenía comentados);
+al anular, el comprobante entregado vuelve a GENERADO/ENTREGADO PARCIAL aunque antes estuviera COBRADO.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: remitos, presupuestos, órdenes de pago,
+transaccionales: presupuestos, órdenes de pago,
 compras y facturas de proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación
 bancaria y alta de usuarios (Membership).

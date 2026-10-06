@@ -109,6 +109,23 @@ public interface IVentaRepository
 
     Task BorrarRelacionAsync(int idFactura, int idNotaCredito, CancellationToken cancellationToken = default);
 
+    // ---------- Remitos ----------
+
+    /// <summary>Letra del comprobante según la categoría de IVA del cliente (ComprobantesLetras_BuscarPorID_ComprobanteTipoYPorID_CategoriaIVACliente).</summary>
+    Task<string?> GetLetraAsync(int idComprobanteTipo, int idCategoriaIvaCliente, CancellationToken cancellationToken = default);
+
+    /// <summary>Relaciones donde el comprobante figura como remito (DocumentosClienteRemitos_BuscarPorID_Remito).</summary>
+    Task<List<Db.DocumentosClienteRemitos>> GetRelacionesComoRemitoAsync(int idRemito, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Comprobantes del cliente habilitados para remitir y con pendiente (DocumentosCliente_FacturasParaRemitarPorID_Entidad):
+    /// de los tipos indicados, Remitar = 1, Pendiente = 1 y estado fuera de <paramref name="estadosExcluidos"/>.
+    /// </summary>
+    Task<List<Db.DocumentosCliente>> GetComprobantesParaRemitirAsync(int idEntidad, IReadOnlyCollection<int> tipos, IReadOnlyCollection<int> estadosExcluidos, CancellationToken cancellationToken = default);
+
+    /// <summary>Líneas del comprobante con saldo de stock pendiente (..._Pendiente_Remitar).</summary>
+    Task<List<LineaPendienteRow>> GetLineasPendientesAsync(int idDocumentoCliente, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Lock exclusivo de la factura mientras se pide el CAE (sp_getapplock de sesión: dura lo que dura la llamada a AFIP,
     /// que va fuera de toda transacción). Si otro request ya la está autorizando, lanza ConflictException.
@@ -117,3 +134,6 @@ public interface IVentaRepository
 }
 
 public sealed record OfertaActivaRow(int IdOferta, int TipoOferta);
+
+/// <summary>Línea con saldo pendiente: el detalle del comprobante más su movimiento de stock.</summary>
+public sealed record LineaPendienteRow(Db.DocumentosClienteDetalle Detalle, int IdComprobanteTipo, decimal Saldo);

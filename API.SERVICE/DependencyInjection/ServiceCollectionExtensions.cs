@@ -86,6 +86,11 @@ public static partial class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(afip.TimeoutSeconds);
         });
         services.AddScoped<IAutorizarFacturaElectronicaUseCase, AutorizarFacturaElectronicaUseCase>();
+        services.AddScoped<IIniciarRemitoUseCase, IniciarRemitoUseCase>();
+        services.AddScoped<ICreateRemitoUseCase, CreateRemitoUseCase>();
+        services.AddScoped<IAnularRemitoUseCase, AnularRemitoUseCase>();
+        services.AddScoped<IGetComprobantesParaRemitirUseCase, GetComprobantesParaRemitirUseCase>();
+        services.AddScoped<IGetLineasPendientesUseCase, GetLineasPendientesUseCase>();
         services.AddScoped<IIniciarNotaCreditoUseCase, IniciarNotaCreditoUseCase>();
         services.AddScoped<ICreateNotaCreditoUseCase, CreateNotaCreditoUseCase>();
         services.AddScoped<IAutorizarNotaCreditoUseCase, AutorizarNotaCreditoUseCase>();

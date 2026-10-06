@@ -106,6 +106,21 @@ public class VentaQueriesTranslationTests
     }
 
     [Fact]
+    public async Task Remitos_TraducenASql()
+    {
+        await _repo.GetLetraAsync(2, 1);
+        await _repo.GetRelacionesComoRemitoAsync(300);
+        await _repo.GetComprobantesParaRemitirAsync(5, [3, 11, 1], [43, 122]);
+        await _repo.GetLineasPendientesAsync(200);
+
+        _interceptor.Commands.Should().HaveCount(4);
+        _interceptor.Commands.ElementAt(0).Should().Contain("FROM [ComprobantesLetras]").And.Contain("= 1");
+        _interceptor.Commands.ElementAt(1).Should().Contain("FROM [DocumentosClienteRemitos]").And.Contain("[ID_Remito] = @");
+        _interceptor.Commands.ElementAt(2).Should().Contain("[Remitar] = CAST(1 AS bit)").And.Contain("NOT IN").And.Contain("OPENJSON");
+        LastSql.Should().Contain("INNER JOIN [DocumentosClienteDetalle]").And.Contain("<> 0.0");
+    }
+
+    [Fact]
     public async Task BloquearAutorizacion_UsaAppLockDeSesionYLoLibera()
     {
         await using (await _repo.BloquearAutorizacionAsync(800))
