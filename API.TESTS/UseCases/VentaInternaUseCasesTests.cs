@@ -285,11 +285,12 @@ public class VentaInternaUseCasesTests
     private CreateVentaInternaUseCase CreateSut()
     {
         var clock = new FixedServerClock(Ahora);
-        return new CreateVentaInternaUseCase(_ventas, _recibos, new ReciboCobroWriter(_recibos, _ref, clock), _ref, new InlineUnitOfWork(), clock, _user.Object);
+        var writer = new VentaWriter(_ventas, new ReciboCobroWriter(_recibos, _ref, clock), _ref);
+        return new CreateVentaInternaUseCase(writer, _recibos, _ref, new InlineUnitOfWork(), clock, _user.Object);
     }
 
     private AnularVentaInternaUseCase AnularSut() =>
-        new(_ventas, _recibos, _ref, new InlineUnitOfWork(), new FixedServerClock(Ahora), _user.Object);
+        new(new VentaAnulador(_ventas, _recibos, _ref), _ventas, _recibos, _ref, new InlineUnitOfWork(), new FixedServerClock(Ahora), _user.Object);
 
     private void Documento(int id, int estado, int tipo = R.Ven) =>
         _ventas.Documentos[id] = new DocumentosCliente

@@ -7,11 +7,21 @@ namespace API.SERVICE.Models.Ventas;
 /// Alta de comprobante interno de venta (VEN, letra X, sin AFIP) — FrmFacturas.
 /// Los importes de líneas y totales se graban como llegan, igual que en el ERP (los calcula la pantalla).
 /// </summary>
-public sealed class CreateVentaInternaDto
+public sealed class CreateVentaInternaDto : VentaDtoBase
+{
+    /// <summary>Solo con numeración manual (NUMERACION/RV = 1).</summary>
+    [MaxLength(50)] public string? PuntoVenta { get; set; }
+
+    /// <summary>Solo con numeración manual (NUMERACION/RV = 1).</summary>
+    [MaxLength(50)] public string? Numero { get; set; }
+}
+
+/// <summary>Datos comunes a todo comprobante de venta (interno o factura electrónica).</summary>
+public abstract class VentaDtoBase
 {
     [Required] public int? IdEntidad { get; set; }
 
-    /// <summary>Fecha del comprobante; la hora se toma del servidor.</summary>
+    /// <summary>Fecha del comprobante.</summary>
     [Required] public DateTime? FechaEmision { get; set; }
 
     [Required] public int? IdSucursal { get; set; }
@@ -48,12 +58,6 @@ public sealed class CreateVentaInternaDto
 
     /// <summary>Confirma la venta aunque el cliente supere su límite de cta. cte. (el ERP lo preguntaba en pantalla).</summary>
     public bool ConfirmarExcesoLimite { get; set; }
-
-    /// <summary>Solo con numeración manual (NUMERACION/RV = 1).</summary>
-    [MaxLength(50)] public string? PuntoVenta { get; set; }
-
-    /// <summary>Solo con numeración manual (NUMERACION/RV = 1).</summary>
-    [MaxLength(50)] public string? Numero { get; set; }
 }
 
 public sealed class VentaItemDto

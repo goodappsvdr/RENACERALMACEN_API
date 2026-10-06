@@ -68,6 +68,8 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IGenerarRecibosAutomaticosUseCase, GenerarRecibosAutomaticosUseCase>();
 
         services.AddScoped<IVentaRepository, VentaRepository>();
+        services.AddScoped<IVentaWriter, VentaWriter>();
+        services.AddScoped<IVentaAnulador, VentaAnulador>();
         services.AddScoped<IIniciarVentaInternaUseCase, IniciarVentaInternaUseCase>();
         services.AddScoped<ICreateVentaInternaUseCase, CreateVentaInternaUseCase>();
         services.AddScoped<IAnularVentaInternaUseCase, AnularVentaInternaUseCase>();
