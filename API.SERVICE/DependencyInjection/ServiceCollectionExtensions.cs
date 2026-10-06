@@ -19,6 +19,7 @@ using API.SERVICE.UseCases.Auth;
 using API.SERVICE.UseCases.Caja;
 using API.SERVICE.UseCases.Clientes;
 using API.SERVICE.UseCases.Items;
+using API.SERVICE.UseCases.Sistema;
 using API.SERVICE.UseCases.Ventas;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -65,6 +66,13 @@ public static partial class ServiceCollectionExtensions
 
         services.AddScoped<IReciboCobroRepository, ReciboCobroRepository>();
         services.AddScoped<IPlanillaCajaRepository, PlanillaCajaRepository>();
+        services.AddScoped<IUsuarioAdminRepository, UsuarioAdminRepository>();
+        services.AddScoped<IGetUsuariosAdminUseCase, GetUsuariosAdminUseCase>();
+        services.AddScoped<IGetUsuarioAdminUseCase, GetUsuarioAdminUseCase>();
+        services.AddScoped<IGetUsuarioAdminOpcionesUseCase, GetUsuarioAdminOpcionesUseCase>();
+        services.AddScoped<ICreateUsuarioAdminUseCase, CreateUsuarioAdminUseCase>();
+        services.AddScoped<IUpdateUsuarioAdminUseCase, UpdateUsuarioAdminUseCase>();
+        services.AddScoped<ICambiarPasswordUseCase, CambiarPasswordUseCase>();
         services.AddScoped<IGetPlanillasCajaUseCase, GetPlanillasCajaUseCase>();
         services.AddScoped<IGetPlanillaCajaResumenUseCase, GetPlanillaCajaResumenUseCase>();
         services.AddScoped<IIniciarPlanillaCajaUseCase, IniciarPlanillaCajaUseCase>();

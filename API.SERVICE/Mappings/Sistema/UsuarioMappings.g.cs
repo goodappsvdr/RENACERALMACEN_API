@@ -22,21 +22,4 @@ public static partial class UsuarioMappings
         IdSucursal = entity.IdSucursal,
         IdEstado = entity.IdEstado,
     };
-
-    public static Db.Usuarios ToEntity(this UsuarioDto dto)
-    {
-        var entity = new Db.Usuarios();
-        dto.ApplyTo(entity);
-        return entity;
-    }
-
-    /// <summary>Copia el Dto sobre la entidad (no toca la clave).</summary>
-    public static void ApplyTo(this UsuarioDto dto, Db.Usuarios entity)
-    {
-        entity.Nombre = dto.Nombre;
-        entity.Email = dto.Email;
-        entity.Imagen = dto.Imagen;
-        entity.IdSucursal = dto.IdSucursal;
-        entity.IdEstado = dto.IdEstado;
-    }
 }

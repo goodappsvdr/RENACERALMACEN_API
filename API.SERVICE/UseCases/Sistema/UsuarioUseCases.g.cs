@@ -8,7 +8,6 @@ using API.SERVICE.Interfaces.Sistema;
 using API.SERVICE.Mappings.Sistema;
 using API.SERVICE.Models.Common;
 using API.SERVICE.Models.Sistema;
-using API.SERVICE.Services.Cache;
 using API.SERVICE.UseCases.Crud;
 using Db = global::API.DA.Entities;
 
@@ -34,21 +33,6 @@ public sealed partial class GetUsuarioByIdUseCase(IUsuarioRepository repository)
     : GetByIdUseCaseBase<Db.Usuarios, int, UsuarioFilter, UsuarioDisplay>(repository), IGetUsuarioByIdUseCase
 {
     protected override string EntityName => "Usuario";
-
-    protected override UsuarioDisplay ToDisplay(Db.Usuarios entity) => entity.ToDisplay();
-}
-
-public interface IUpdateUsuarioUseCase
-{
-    Task<UsuarioDisplay> ExecuteAsync(int id, UsuarioDto dto, CancellationToken cancellationToken = default);
-}
-
-public sealed partial class UpdateUsuarioUseCase(IUsuarioRepository repository, IRedisCacheService cache)
-    : UpdateUseCaseBase<Db.Usuarios, int, UsuarioFilter, UsuarioDto, UsuarioDisplay>(repository, cache), IUpdateUsuarioUseCase
-{
-    protected override string EntityName => "Usuario";
-
-    protected override void Apply(UsuarioDto dto, Db.Usuarios entity) => dto.ApplyTo(entity);
 
     protected override UsuarioDisplay ToDisplay(Db.Usuarios entity) => entity.ToDisplay();
 }

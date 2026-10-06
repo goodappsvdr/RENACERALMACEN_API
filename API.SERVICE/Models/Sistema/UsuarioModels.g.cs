@@ -22,23 +22,6 @@ public sealed partial class UsuarioDisplay
     public int? IdEstado { get; init; }
 }
 
-/// <summary>Entrada de alta/modificación de dbo.Usuarios.</summary>
-public sealed partial class UsuarioDto
-{
-    [MaxLength(500)]
-    public string? Nombre { get; set; }
-
-    [MaxLength(500)]
-    public string? Email { get; set; }
-
-    [MaxLength(500)]
-    public string? Imagen { get; set; }
-
-    public int? IdSucursal { get; set; }
-
-    public int? IdEstado { get; set; }
-}
-
 /// <summary>Filtros del listado de dbo.Usuarios.</summary>
 public sealed partial class UsuarioFilter : PagedQuery
 {

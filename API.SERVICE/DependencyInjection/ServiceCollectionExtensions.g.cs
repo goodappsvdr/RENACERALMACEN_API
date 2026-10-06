@@ -483,12 +483,9 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IUsuarioRepository, UsuarioRepository>();
         services.AddScoped<IGetUsuarioListUseCase, GetUsuarioListUseCase>();
         services.AddScoped<IGetUsuarioByIdUseCase, GetUsuarioByIdUseCase>();
-        services.AddScoped<IUpdateUsuarioUseCase, UpdateUsuarioUseCase>();
         services.AddScoped<IUsuarioSucursalRepository, UsuarioSucursalRepository>();
         services.AddScoped<IGetUsuarioSucursalListUseCase, GetUsuarioSucursalListUseCase>();
         services.AddScoped<IGetUsuarioSucursalByIdUseCase, GetUsuarioSucursalByIdUseCase>();
-        services.AddScoped<ICreateUsuarioSucursalUseCase, CreateUsuarioSucursalUseCase>();
-        services.AddScoped<IDeleteUsuarioSucursalUseCase, DeleteUsuarioSucursalUseCase>();
 
         // Stock
         services.AddScoped<IEntidadCtaCteStockMovimientoDetalleRepository, EntidadCtaCteStockMovimientoDetalleRepository>();

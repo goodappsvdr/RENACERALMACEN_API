@@ -32,6 +32,16 @@ public static class MembershipPasswordHasher
         return CryptographicOperations.FixedTimeEquals(actual, expected);
     }
 
+    /// <summary>
+    /// Sal y hash nuevos, en el mismo formato que SqlMembershipProvider (sal aleatoria de 16 bytes) para que el WebForms
+    /// siga validando la contraseña. SHA1 se mantiene solo por compatibilidad con el ERP.
+    /// </summary>
+    public static (string Hash, string Salt) Create(string password)
+    {
+        var salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+        return (Convert.ToBase64String(Hash(password, salt)), salt);
+    }
+
     public static byte[] Hash(string password, string base64Salt)
     {
         var salt = Convert.FromBase64String(base64Salt);

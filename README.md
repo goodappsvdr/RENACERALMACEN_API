@@ -418,9 +418,43 @@ Diferencias **intencionales** con el ERP:
 
 `FrmAjustesCajaABM` (ajustes manuales de caja) no se portó: `CajasPlanillasDetalle` solo tiene movimientos de recibos.
 
+### Usuarios (`/api/Usuario`)
+
+Port de `FrmUsuariosABM` y `FrmCambiarPass`. Un usuario del ERP son cuatro cosas que se mantienen juntas en una transacción:
+`aspnet_Users` + `aspnet_Membership` (login), `aspnet_UsersInRoles` (un rol), la fila de `Usuarios` (la que usan comprobantes y caja)
+y `UsuariosSucursales`.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET gestion` · `GET gestion/{id}` · `GET gestion/opciones` | Usuarios con rol y estado; detalle con rol y sucursales; roles y sucursales activas. **Nunca devuelve contraseñas.** |
+| `POST gestion` | Alta: `{ usuario, password, nombre, email, idRol, activo, sucursales[] }`. 409 si el nombre de usuario está en uso. |
+| `PUT gestion/{id}` | Nombre, email (también en Membership), estado (`Usuarios.ID_Estado` 15/16 y `IsApproved`), rol, sucursales y, si viene, contraseña. |
+| `POST cambiar-password` | `{ passwordActual, passwordNueva }` del usuario logueado. |
+
+`gestion*` exige rol **ADMINISTRADOR**. La contraseña se guarda con el mismo formato que `SqlMembershipProvider`
+(`Base64(SHA1(salt + UTF-16LE(pw)))`, sal de 16 bytes, `PasswordFormat = 1`), así el usuario entra igual al WebForms y a la API.
+El usuario y `UsuariosSucursales` pasaron a **solo lectura** en el CRUD generado (`entities.config`): antes cualquier usuario
+logueado podía editar estados o darse acceso a otras sucursales sin pasar por Membership.
+
+Diferencias **intencionales** con el ERP (seguridad):
+- **No se guarda la contraseña en claro.** El ERP la copiaba en `Usuarios.Pass` y la devolvía al navegador al editar. La API escribe
+  `Pass = ''` y, cuando cambia una contraseña, borra la copia que hubiera. Consecuencia: `FrmCambiarPass` del WebForms (que compara
+  contra esa copia) deja de funcionar para esos usuarios; tienen que usar `POST cambiar-password`.
+- `cambiar-password` valida la actual contra el hash de Membership (el ERP la comparaba con la copia en claro; además
+  `Usuarios_CambiarPass` filtraba por `Email LIKE`, así que cambiaba la copia de todos los usuarios con ese email).
+- Solo un ADMINISTRADOR administra usuarios (el ERP no controlaba roles: cualquier usuario logueado podía crear administradores).
+- Contraseñas nuevas de **mínimo 8** caracteres (el Web.config del ERP pide 2). Las existentes siguen valiendo.
+- Alta inactiva queda con `IsApproved = 0` (el ERP la dejaba aprobada y el usuario podía loguearse).
+- `Usuarios.ID_Sucursal` = la primera sucursal elegida (el ERP grababa 0, y la caja y el login usan ese campo).
+- El nombre de usuario no se puede cambiar (el ERP lo cambiaba solo en `Usuarios` y el login dejaba de encontrar su fila).
+- Un administrador no puede darse de baja a sí mismo.
+
+Se mantiene: SHA1 como hash (lo exige la compatibilidad con el WebForms; migrar a un hash moderno requiere que el WebForms deje de
+validar contraseñas), email no único (`requiresUniqueEmail = false`), un solo rol por usuario. `FrmRolesABM` (ABM de roles) no se portó.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
 transaccionales: órdenes de pago,
 compras y facturas de proveedor, ajustes y movimientos de stock, depósitos/extracciones, conciliación
-bancaria y alta de usuarios (Membership).
+bancaria y ABM de roles.

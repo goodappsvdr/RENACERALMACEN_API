@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers.Sistema;
 
-/// <summary>dbo.Usuarios.</summary>
+/// <summary>dbo.Usuarios. Solo lectura: las altas se hacen desde el flujo de negocio correspondiente.</summary>
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
@@ -34,13 +34,4 @@ public sealed partial class UsuarioController : ControllerBase
     [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UsuarioDisplay>> GetById(int id, [FromServices] IGetUsuarioByIdUseCase useCase, CancellationToken cancellationToken) =>
         Ok(await useCase.ExecuteAsync(id, cancellationToken));
-
-    /// <summary>Modificación.</summary>
-    [HttpPut("{id:int}")]
-    [ProducesResponseType(typeof(UsuarioDisplay), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<UsuarioDisplay>> Update(int id, [FromBody] UsuarioDto dto, [FromServices] IUpdateUsuarioUseCase useCase, CancellationToken cancellationToken) =>
-        Ok(await useCase.ExecuteAsync(id, dto, cancellationToken));
 }

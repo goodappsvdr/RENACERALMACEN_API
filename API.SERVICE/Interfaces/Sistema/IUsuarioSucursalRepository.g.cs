@@ -10,6 +10,6 @@ using Db = global::API.DA.Entities;
 namespace API.SERVICE.Interfaces.Sistema;
 
 /// <summary>Persistencia de dbo.UsuariosSucursales.</summary>
-public partial interface IUsuarioSucursalRepository : global::API.SERVICE.Interfaces.IRepository<Db.UsuariosSucursales, int, UsuarioSucursalFilter>
+public partial interface IUsuarioSucursalRepository : global::API.SERVICE.Interfaces.IReadRepository<Db.UsuariosSucursales, int, UsuarioSucursalFilter>
 {
 }

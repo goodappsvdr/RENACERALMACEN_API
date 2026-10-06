@@ -17,14 +17,6 @@ public sealed partial class UsuarioSucursalDisplay
     public int? IdSucursal { get; init; }
 }
 
-/// <summary>Entrada de alta/modificación de dbo.UsuariosSucursales.</summary>
-public sealed partial class UsuarioSucursalDto
-{
-    public int? IdUsuario { get; set; }
-
-    public int? IdSucursal { get; set; }
-}
-
 /// <summary>Filtros del listado de dbo.UsuariosSucursales.</summary>
 public sealed partial class UsuarioSucursalFilter : PagedQuery
 {

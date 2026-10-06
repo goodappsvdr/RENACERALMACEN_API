@@ -8,7 +8,6 @@ using API.SERVICE.Interfaces.Sistema;
 using API.SERVICE.Mappings.Sistema;
 using API.SERVICE.Models.Common;
 using API.SERVICE.Models.Sistema;
-using API.SERVICE.Services.Cache;
 using API.SERVICE.UseCases.Crud;
 using Db = global::API.DA.Entities;
 
@@ -36,30 +35,4 @@ public sealed partial class GetUsuarioSucursalByIdUseCase(IUsuarioSucursalReposi
     protected override string EntityName => "UsuarioSucursal";
 
     protected override UsuarioSucursalDisplay ToDisplay(Db.UsuariosSucursales entity) => entity.ToDisplay();
-}
-
-public interface ICreateUsuarioSucursalUseCase
-{
-    Task<UsuarioSucursalDisplay> ExecuteAsync(UsuarioSucursalDto dto, CancellationToken cancellationToken = default);
-}
-
-public sealed partial class CreateUsuarioSucursalUseCase(IUsuarioSucursalRepository repository, IRedisCacheService cache)
-    : CreateUseCaseBase<Db.UsuariosSucursales, int, UsuarioSucursalFilter, UsuarioSucursalDto, UsuarioSucursalDisplay>(repository, cache), ICreateUsuarioSucursalUseCase
-{
-    protected override string EntityName => "UsuarioSucursal";
-
-    protected override Db.UsuariosSucursales ToEntity(UsuarioSucursalDto dto) => dto.ToEntity();
-
-    protected override UsuarioSucursalDisplay ToDisplay(Db.UsuariosSucursales entity) => entity.ToDisplay();
-}
-
-public interface IDeleteUsuarioSucursalUseCase
-{
-    Task ExecuteAsync(int id, CancellationToken cancellationToken = default);
-}
-
-public sealed partial class DeleteUsuarioSucursalUseCase(IUsuarioSucursalRepository repository, IRedisCacheService cache)
-    : DeleteUseCaseBase<Db.UsuariosSucursales, int, UsuarioSucursalFilter>(repository, cache), IDeleteUsuarioSucursalUseCase
-{
-    protected override string EntityName => "UsuarioSucursal";
 }

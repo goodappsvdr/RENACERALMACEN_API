@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers.Sistema;
 
-/// <summary>dbo.UsuariosSucursales.</summary>
+/// <summary>dbo.UsuariosSucursales. Solo lectura: las altas se hacen desde el flujo de negocio correspondiente.</summary>
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
@@ -34,26 +34,4 @@ public sealed partial class UsuarioSucursalController : ControllerBase
     [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UsuarioSucursalDisplay>> GetById(int id, [FromServices] IGetUsuarioSucursalByIdUseCase useCase, CancellationToken cancellationToken) =>
         Ok(await useCase.ExecuteAsync(id, cancellationToken));
-
-    /// <summary>Alta.</summary>
-    [HttpPost]
-    [ProducesResponseType(typeof(UsuarioSucursalDisplay), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<UsuarioSucursalDisplay>> Create([FromBody] UsuarioSucursalDto dto, [FromServices] ICreateUsuarioSucursalUseCase useCase, CancellationToken cancellationToken)
-    {
-        var created = await useCase.ExecuteAsync(dto, cancellationToken);
-        return CreatedAtAction(nameof(GetById), new { id = created.IdUsuarioSucursal }, created);
-    }
-
-    /// <summary>Baja física (el ERP también borra estos registros).</summary>
-    [HttpDelete("{id:int}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Delete(int id, [FromServices] IDeleteUsuarioSucursalUseCase useCase, CancellationToken cancellationToken)
-    {
-        await useCase.ExecuteAsync(id, cancellationToken);
-        return NoContent();
-    }
 }
