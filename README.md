@@ -70,9 +70,9 @@ Uno por tabla expuesta (110), agrupados por módulo en Swagger. Ruta `api/{Recur
 Qué operación tiene cada tabla está en [`tools/ApiGenerator/entities.config`](tools/ApiGenerator/entities.config).
 
 **Solo lectura por diseño:** comprobantes y movimientos (ventas, compras, cta. cte., recibos, órdenes
-de pago, caja, bancos, stock, libros IVA) e **Items**. En el ERP esos datos solo se graban dentro de
-flujos transaccionales que tocan varias tablas (p. ej. alta de ítem = ítem + sucursales + impuestos
-+ historial de precios). Un POST suelto dejaría datos inconsistentes. Se habilitan al portar cada flujo.
+de pago, caja, bancos, stock, libros IVA). En el ERP esos datos solo se graban dentro de flujos
+transaccionales que tocan varias tablas; un POST suelto dejaría datos inconsistentes. Se habilitan a
+medida que se porta cada flujo (ver "Flujos transaccionales").
 
 **Nunca se exponen:** `Usuarios.Pass`, `Usuarios.Token`, `DatosEmpresa.Clave_Fiscal` y las tablas
 `aspnet_*`. `Usuarios.Usuario` / `UserId` no se editan por CRUD (atan la fila a Membership).
@@ -115,10 +115,52 @@ las escrituras del recurso invalidan su key.
   por id y lookups contra el proveedor SQL Server real, interceptando la conexión. Falla si algún LINQ no traduce a SQL.
   No necesita base.
 - Login/Membership (hash verificado contra .NET Framework, bloqueo por intentos), cache (fallback, stampede) y casos de uso CRUD.
+- Flujos transaccionales: lógica de cada caso de uso con repositorios mockeados + traducción a SQL de sus consultas propias.
+  La transacción real (`EfUnitOfWork`) no tiene test automático: necesita una base SQL Server.
+
+## Flujos transaccionales
+
+Operaciones que en el WebForms usan `IniciaTransaccion` / `FinalizaTransaccion` / `CancelaTransaccion`.
+Se escriben a mano (no las genera el generador) con este patrón:
+
+- **Caso de uso** en `UseCases/{Módulo}/`, que envuelve todo en `IUnitOfWork.ExecuteInTransactionAsync`:
+  commit si termina bien, rollback si lanza. Es compatible con los reintentos de EF (`EnableRetryOnFailure`):
+  ante un error transitorio se reintenta el bloque entero, así que **todas las lecturas y escrituras van adentro del delegado**.
+- **Operaciones extra del repositorio** en un `partial` del repositorio generado (`Interfaces/{Módulo}/I{X}Repository.cs`
+  + `Repositories/{Módulo}/{X}Repository.cs`).
+- **Reglas de negocio** en `Domain/{Módulo}/`.
+- **Endpoints** en un `partial` del controller generado (`Controllers/{Módulo}/{X}Controller.cs`).
+- Fecha/hora: `IServerClock` (= `GETDATE()` del servidor, como `FechaHoraServidor()`), porque las columnas legacy guardan hora local.
+- Usuario: `ICurrentUser` (sale del JWT; `IdUsuario` = `Usuarios.ID_Usuario`).
+- Parámetros: `IParametroRepository.GetValorAsync` (= `SingletonParametro()`).
+
+### ABM de ítems (`POST /api/Item`, `PUT /api/Item/{id}`)
+
+Port de `Items_Agregar_Ws` / `Items_Modificar_Ws` (`FrmItemsABM`).
+
+- **Alta:** `Items` + `ItemsImpuestos` + una fila de `ItemsSucursales` por sucursal (con su stock y estado).
+- **Modificación:** historial en `ItemsPreciosActualizacion` (siempre la primera vez; después solo si cambió el precio a 2 decimales),
+  datos del ítem, impuesto y datos por sucursal. El stock (del ítem y de cada sucursal) solo se pisa si el parámetro
+  `CAMBIASTOCK/CAMBIASTOCK` vale 1.
+
+Comportamientos del ERP que se **mantienen** a propósito:
+- `Items.Neto` guarda el **costo** (la tabla `Items` no tiene columna `Costo`); el neto real va en `ItemsSucursales.Neto`.
+- Valores fijos: `ID_Empresa = 1`, `TieneDetalle = 1`, `UnidadesXBulto = 1`, `EsDolar = 0`; `CuentaDebe/CuentaHaber/MtsKgs` = 1 en el alta y 0 en la modificación.
+- Alícuota según `ID_Impuesto` hardcodeada: 1 = 21 %, 2 = 10,5 %, 3 = 27 %, 4 = 0 %.
+- En la modificación, el precio anterior para el historial es el de la **primera** fila de `ItemsSucursales` del ítem,
+  y una sucursal sin fila para el ítem se ignora (no se crea).
+
+Diferencias **intencionales** con el ERP:
+- `ID_Impuesto` desconocido: el ERP grababa alícuota 0; acá se rechaza (400).
+- Descripción de más de 50 caracteres: el SP de modificación del ERP la truncaba en silencio; acá se rechaza (400).
+- Código de balanza (empieza con "2"): el ERP lo cortaba a 7 dígitos solo al modificar (y fallaba si tenía menos de 7);
+  acá se corta en alta y modificación, y solo si es más largo.
+- Ítem sin ninguna fila en `ItemsSucursales`: el ERP fallaba con un error genérico; acá devuelve 400 con mensaje claro.
+- El usuario tiene que tener fila en `Usuarios` para modificar (lo pide el historial de precios); si no, 403.
 
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
 transaccionales: facturación y notas de crédito (AFIP), remitos, presupuestos, cobranzas/recibos
 (incluye emisión masiva), órdenes de pago, compras y facturas de proveedor, ajustes y movimientos de stock,
-planillas de caja, depósitos/extracciones, conciliación bancaria, ABM de ítems y alta de usuarios (Membership).
+planillas de caja, depósitos/extracciones, conciliación bancaria y alta de usuarios (Membership).

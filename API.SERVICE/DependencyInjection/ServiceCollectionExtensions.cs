@@ -1,9 +1,14 @@
 using API.DA.DbContexts;
+using API.SERVICE.Interfaces;
 using API.SERVICE.Interfaces.Auth;
+using API.SERVICE.Interfaces.Sistema;
 using API.SERVICE.Repositories.Auth;
+using API.SERVICE.Repositories.Base;
+using API.SERVICE.Repositories.Sistema;
 using API.SERVICE.Security;
 using API.SERVICE.Services.Cache;
 using API.SERVICE.UseCases.Auth;
+using API.SERVICE.UseCases.Items;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,8 +36,16 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<ILoginUseCase, LoginUseCase>();
 
+        // Infraestructura de flujos transaccionales
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddScoped<IServerClock, SqlServerClock>();
+
         // Repositorios, casos de uso y lookups generados por tools/ApiGenerator.
         AddGeneratedServices(services);
+
+        // Flujos compuestos (escritos a mano, usan los repositorios generados + sus partial)
+        services.AddScoped<ICreateItemUseCase, CreateItemUseCase>();
+        services.AddScoped<IUpdateItemUseCase, UpdateItemUseCase>();
 
         return services;
     }
