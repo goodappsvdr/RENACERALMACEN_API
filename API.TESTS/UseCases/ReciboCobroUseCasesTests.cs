@@ -310,7 +310,7 @@ public class ReciboCobroUseCasesTests
 
     // ---------- helpers ----------
 
-    private CreateReciboUseCase CreateSut() => new(_repo, _ref, new InlineUnitOfWork(), new FixedServerClock(Ahora), _user.Object);
+    private CreateReciboUseCase CreateSut() => new(new ReciboCobroWriter(_repo, _ref, new FixedServerClock(Ahora)), _repo, new InlineUnitOfWork(), _user.Object);
 
     private AnularReciboUseCase AnularSut() => new(_repo, _ref, new InlineUnitOfWork(), new FixedServerClock(Ahora));
 

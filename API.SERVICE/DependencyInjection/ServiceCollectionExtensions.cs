@@ -3,15 +3,18 @@ using API.SERVICE.Interfaces;
 using API.SERVICE.Interfaces.Auth;
 using API.SERVICE.Interfaces.Clientes;
 using API.SERVICE.Interfaces.Sistema;
+using API.SERVICE.Interfaces.Ventas;
 using API.SERVICE.Repositories.Auth;
 using API.SERVICE.Repositories.Base;
 using API.SERVICE.Repositories.Clientes;
 using API.SERVICE.Repositories.Sistema;
+using API.SERVICE.Repositories.Ventas;
 using API.SERVICE.Security;
 using API.SERVICE.Services.Cache;
 using API.SERVICE.UseCases.Auth;
 using API.SERVICE.UseCases.Clientes;
 using API.SERVICE.UseCases.Items;
+using API.SERVICE.UseCases.Ventas;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,10 +61,16 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IReciboCobroRepository, ReciboCobroRepository>();
         services.AddScoped<IIniciarReciboUseCase, IniciarReciboUseCase>();
         services.AddScoped<IGetComprobantesPendientesUseCase, GetComprobantesPendientesUseCase>();
+        services.AddScoped<IReciboCobroWriter, ReciboCobroWriter>();
         services.AddScoped<ICreateReciboUseCase, CreateReciboUseCase>();
         services.AddScoped<IAnularReciboUseCase, AnularReciboUseCase>();
         services.AddScoped<IGetEntidadesRecibosAutomaticosUseCase, GetEntidadesRecibosAutomaticosUseCase>();
         services.AddScoped<IGenerarRecibosAutomaticosUseCase, GenerarRecibosAutomaticosUseCase>();
+
+        services.AddScoped<IVentaRepository, VentaRepository>();
+        services.AddScoped<IIniciarVentaInternaUseCase, IniciarVentaInternaUseCase>();
+        services.AddScoped<ICreateVentaInternaUseCase, CreateVentaInternaUseCase>();
+        services.AddScoped<IAnularVentaInternaUseCase, AnularVentaInternaUseCase>();
 
         return services;
     }

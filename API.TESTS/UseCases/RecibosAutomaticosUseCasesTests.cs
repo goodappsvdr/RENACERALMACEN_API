@@ -185,7 +185,7 @@ public class RecibosAutomaticosUseCasesTests
     {
         var clock = new FixedServerClock(Ahora);
         var pendientes = new GetComprobantesPendientesUseCase(_repo, clock);
-        var crear = new CreateReciboUseCase(_repo, _ref, new InlineUnitOfWork(), clock, _user.Object);
+        var crear = new CreateReciboUseCase(new ReciboCobroWriter(_repo, _ref, clock), _repo, new InlineUnitOfWork(), _user.Object);
         return new GenerarRecibosAutomaticosUseCase(_repo, _ref, pendientes, crear, clock, _user.Object, NullLogger<GenerarRecibosAutomaticosUseCase>.Instance);
     }
 

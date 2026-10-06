@@ -26,6 +26,7 @@ public sealed class FakeReferencias : IReferenciasRepository
     public const int Rec = 7, Ven = 11, Fv = 3, Op = 12, Nc = 4, Fc = 20, Com = 21;
     public const int Efectivo = 1, Cheque = 2, Deposito = 3, Tarjeta = 8, Retencion = 5;
     public const int ChequeAutomatico = 900;
+    public const int Pv = 1, ElementoCtaCte = 9;
 
     private readonly Dictionary<string, int> _estados = new(StringComparer.OrdinalIgnoreCase);
 
@@ -44,6 +45,9 @@ public sealed class FakeReferencias : IReferenciasRepository
         [("ELEMENTO", "TARJETAS")] = Tarjeta.ToString(),
         [("ELEMENTO", "RETENCION")] = Retencion.ToString(),
         [("NUMERACION", "REC")] = "0",
+        [("NUMERACION", "RV")] = "0",
+        [("COMPROBANTE", "PV")] = Pv.ToString(),
+        [("ELEMENTO", "CTACTE")] = ElementoCtaCte.ToString(),
     };
 
     public int Estado((string Categoria, string Nombre) estado) => Estado(estado.Categoria, estado.Nombre);

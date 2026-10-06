@@ -214,9 +214,53 @@ o de tipos desconocidos se hacen a mano, y se imputa primero lo que está a favo
 Diferencia con el ERP: el `SyncLock` del WebForms solo serializaba dentro de un proceso; acá lo resuelve el lock por cliente
 en la base, que también cubre varias instancias de la API y los recibos manuales.
 
+### Comprobante interno de venta — VEN (`/api/DocumentoCliente`)
+
+Port de `Agregar_Ws` / `GenerarRecibo` / `Editar_Ws` / `AnularRecibo` / `IniciarPuntoVenta_WS` (`FrmFacturas`). Letra X, sin AFIP.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET interno/nuevo` | Planilla de caja abierta, punto de venta y número sugerido (`NUMERACION/RV` = 1 → manual). |
+| `POST interno` | Cabecera, observación, vencimiento (`DiasInteres` del cliente), detalle, stock, presupuestos/remitos facturados, cta. cte. y, si vienen formas de pago, el **recibo del cobro en el momento** en la misma transacción. |
+| `POST {id}/anular` | Devuelve stock (o el saldo de los remitos/presupuestos), ofertas y números de serie; anula detalle, caja, cheques, bancos, retenciones, cta. cte., el recibo del cobro en el momento y el comprobante. Solo VEN en estado 42/104. |
+
+Stock por línea, como el ERP: venta directa → descuenta stock y registra el movimiento; desde un **remito** → no mueve stock
+(ya lo movió el remito) y consume su saldo pendiente; desde un **presupuesto** → consume su saldo y descuenta stock.
+
+El recibo del cobro en el momento usa el mismo `IReciboCobroWriter` que el recibo manual (validaciones, caja, cheques,
+bancos, retenciones y numeración incluidas).
+
+Reglas que el ERP aplicaba **solo en el navegador** y ahora valida el servidor:
+- Cliente **sin cta. cte. habilitada** → la venta tiene que tener formas de pago (contado).
+- Cliente **con cta. cte.**: si saldo (suma de `Total2`) + venta supera `LimiteCtaCte` → 409, salvo `confirmarExcesoLimite: true`
+  (equivale al "¿desea continuar igual?" de la pantalla).
+
+Diferencias **intencionales** con el ERP:
+- La oferta por agotamiento se descuenta/devuelve **dentro** de la transacción (el ERP lo hacía fuera: si la venta fallaba, la oferta quedaba descontada).
+- Cada línea graba su propio `Otros` (el ERP grababa el `Otros` de la cabecera en todas las líneas).
+- La observación completa va a `DocumentosClienteObservaciones`; en la cabecera se trunca a 50 como hacía el SP.
+- Planilla y número los resuelve el servidor (`UPDATE ... OUTPUT`), con lock por cliente.
+- Razón social, CUIT, etc. pueden venir en el request (consumidor final con nombre); si no, salen de la ficha.
+
+Pendiente de definir con negocio:
+- **Importes de líneas y totales se graban como llegan** (igual que el ERP: los calcula la pantalla). El cálculo de
+  recargo/descuento global del JavaScript reutiliza variables y no es confiable como referencia; conviene definir la
+  fórmula oficial y validarla en el servidor.
+- `ItemsOfertas_*Cantidad_Disponible` actualiza `OfertasAgotamiento` de **todas** las sucursales de la oferta (se mantiene).
+- En la anulación sin remitos el ERP indexaba la cabecera por número de línea (`ods22.Rows(i)`); acá cada línea usa su propio detalle.
+
+## Factura electrónica (AFIP) — diseño acordado
+
+Pendiente de implementar. Decisiones tomadas:
+- **Dos fases:** la factura se graba como "pendiente AFIP" y se confirma; después se pide el CAE y se actualiza. Si AFIP falla
+  o se corta, queda pendiente y se reintenta consultando a AFIP si ya se emitió. Nunca queda un CAE sin factura (el ERP llamaba
+  a AFIP con la transacción abierta).
+- Cliente del gateway de IDEAS SA detrás de una interfaz; por ahora se prueba solo con dobles (sin homologación).
+- La contraseña del certificado va en configuración secreta (en el ERP está escrita en `API_GA_AFIP.vb`).
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: facturación y notas de crédito (AFIP), remitos, presupuestos, órdenes de pago, compras y facturas de
-proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación bancaria y alta de
-usuarios (Membership).
+transaccionales: factura electrónica y notas de crédito (AFIP), remitos, presupuestos, órdenes de pago, compras y
+facturas de proveedor, ajustes y movimientos de stock, planillas de caja, depósitos/extracciones, conciliación bancaria
+y alta de usuarios (Membership).
