@@ -643,7 +643,7 @@ con los estados que ya existen en DOCUMENTOSCLIENTE.
 
 Lo que tenía el ERP: el combo de empresas consulta `EmpresaSucursales`, una tabla que no existe; la sucursal de origen se guardaba en
 `ID_Usuario`; el alta descontaba del origen y la confirmación volvía a descontarlo (doble descuento) antes de sumar al destino; la
-anulación devolvía el stock usando columnas del detalle que no existen.
+anulación no controlaba que el movimiento no hubiera sido recibido.
 
 ## Pendiente (próximos tickets)
 
