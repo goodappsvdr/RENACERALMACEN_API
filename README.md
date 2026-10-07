@@ -82,8 +82,9 @@ cada una. Se recarga sin reiniciar: negocio puede ajustar roles editando el arch
 - Se suman a los controles propios de cada flujo: administrar usuarios y roles sigue siendo solo de ADMINISTRADOR, la caja y las
   transferencias de stock exigen además operar la sucursal.
 
-Asignación inicial (a validar con negocio): Ventas → COMERCIAL, RESP. EQUIPO COMERCIAL, GESTION DE CLIENTES; Cobranzas → esos +
-CAJERA, RECAUDACION, TESORERIA Y FINANZAS; Caja → CAJERA, RECAUDACION, TESORERIA Y FINANZAS; Compras → GESTION DE PROVEEDORES,
+Asignación inicial (a validar con negocio): Ventas → COMERCIAL, RESP. EQUIPO COMERCIAL, GESTION DE CLIENTES, CAJERA; Cobranzas →
+COMERCIAL, RESP. EQUIPO COMERCIAL, GESTION DE CLIENTES, CAJERA, RECAUDACION, TESORERIA Y FINANZAS; Caja → CAJERA, RECAUDACION,
+TESORERIA Y FINANZAS; Compras → GESTION DE PROVEEDORES,
 RESP. DE PLANTA; Pagos → GESTION DE PROVEEDORES, TESORERIA Y FINANZAS; Bancos → TESORERIA Y FINANZAS; Stock → LOGISTICA,
 RESP. DE PLANTA, RESP. DE PRODUCCION; Maestros → COMERCIAL, GESTION DE CLIENTES, GESTION DE PROVEEDORES; Informes → DIRECTOR;
 Sistema → solo roles totales. CONSULTOR queda de solo lectura. Hoy solo operan un CEO y un ADMINISTRADOR, que tienen todo.

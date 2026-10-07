@@ -35,7 +35,7 @@ public class PermisosPorAreaTests
     [InlineData("COMERCIAL", "Ventas", true)]
     [InlineData("COMERCIAL", "Compras", false)]
     [InlineData("CAJERA", "Caja", true)]
-    [InlineData("CAJERA", "Ventas", false)]
+    [InlineData("CAJERA", "Ventas", true)]
     [InlineData("TESORERIA Y FINANZAS", "Pagos", true)]
     [InlineData("CONSULTOR", "Ventas", false)]
     [InlineData("DIRECTOR", "Maestros", false)]
