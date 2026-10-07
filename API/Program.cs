@@ -1,6 +1,8 @@
 using System.Text;
 using API.Middleware;
+using API.Security;
 using API.SERVICE.DependencyInjection;
+using API.SERVICE.Interfaces;
 using API.SERVICE.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -10,6 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // API solo ve API.SERVICE: DbContext, repositorios y casos de uso se registran ahí.
 builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 if (jwt.Key.Length < 32)
@@ -36,7 +40,8 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 
-builder.Services.AddControllers();
+builder.Services.Configure<PermisosOptions>(builder.Configuration.GetSection(PermisosOptions.SectionName));
+builder.Services.AddControllers(options => options.Filters.Add<PermisoPorAreaFilter>());
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>

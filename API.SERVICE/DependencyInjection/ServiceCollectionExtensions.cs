@@ -1,9 +1,35 @@
 using API.DA.DbContexts;
+using API.SERVICE.Interfaces;
+using API.SERVICE.Interfaces.Afip;
 using API.SERVICE.Interfaces.Auth;
+using API.SERVICE.Interfaces.Bancos;
+using API.SERVICE.Interfaces.Caja;
+using API.SERVICE.Interfaces.Compras;
+using API.SERVICE.Interfaces.Clientes;
+using API.SERVICE.Interfaces.Sistema;
+using API.SERVICE.Interfaces.Stock;
+using API.SERVICE.Interfaces.Ventas;
 using API.SERVICE.Repositories.Auth;
+using API.SERVICE.Repositories.Bancos;
+using API.SERVICE.Repositories.Base;
+using API.SERVICE.Repositories.Caja;
+using API.SERVICE.Repositories.Compras;
+using API.SERVICE.Repositories.Clientes;
+using API.SERVICE.Repositories.Sistema;
+using API.SERVICE.Repositories.Stock;
+using API.SERVICE.Repositories.Ventas;
 using API.SERVICE.Security;
+using API.SERVICE.Services.Afip;
 using API.SERVICE.Services.Cache;
 using API.SERVICE.UseCases.Auth;
+using API.SERVICE.UseCases.Bancos;
+using API.SERVICE.UseCases.Stock;
+using API.SERVICE.UseCases.Caja;
+using API.SERVICE.UseCases.Compras;
+using API.SERVICE.UseCases.Clientes;
+using API.SERVICE.UseCases.Items;
+using API.SERVICE.UseCases.Sistema;
+using API.SERVICE.UseCases.Ventas;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +45,11 @@ public static partial class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection (user-secrets / variable de entorno).");
 
         services.AddDbContext<ElRenacerDbContext>(options =>
-            options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure(maxRetryCount: 3)));
+            options.UseSqlServer(connectionString, sql => sql
+                .EnableRetryOnFailure(maxRetryCount: 3)
+                // ELRENACER tiene compatibility_level 130 (aunque el servidor sea SQL Server 2022):
+                // EF no debe generar SQL que requiera un nivel mayor.
+                .UseCompatibilityLevel(130)));
 
         AddCache(services, configuration);
 
@@ -31,8 +61,112 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<ILoginUseCase, LoginUseCase>();
 
+        // Infraestructura de flujos transaccionales
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddScoped<IServerClock, SqlServerClock>();
+        services.AddScoped<IReferenciasRepository, ReferenciasRepository>();
+
         // Repositorios, casos de uso y lookups generados por tools/ApiGenerator.
         AddGeneratedServices(services);
+
+        // Flujos compuestos (escritos a mano, usan los repositorios generados + sus partial)
+        services.AddScoped<ICreateItemUseCase, CreateItemUseCase>();
+        services.AddScoped<IUpdateItemUseCase, UpdateItemUseCase>();
+
+        services.AddScoped<IReciboCobroRepository, ReciboCobroRepository>();
+        services.AddScoped<IPlanillaCajaRepository, PlanillaCajaRepository>();
+        services.AddScoped<ICompraRepository, CompraRepository>();
+        services.AddScoped<IOrdenPagoRepository, OrdenPagoRepository>();
+        services.AddScoped<IIniciarOrdenPagoUseCase, IniciarOrdenPagoUseCase>();
+        services.AddScoped<IGetComprobantesPendientesPagoUseCase, GetComprobantesPendientesPagoUseCase>();
+        services.AddScoped<IOrdenPagoWriter, OrdenPagoWriter>();
+        services.AddScoped<ICreateOrdenPagoUseCase, CreateOrdenPagoUseCase>();
+        services.AddScoped<IAnularOrdenPagoUseCase, AnularOrdenPagoUseCase>();
+        services.AddScoped<IIniciarFacturaCompraUseCase, IniciarFacturaCompraUseCase>();
+        services.AddScoped<ICreateFacturaCompraUseCase, CreateFacturaCompraUseCase>();
+        services.AddScoped<IAnularFacturaCompraUseCase, AnularFacturaCompraUseCase>();
+        services.AddScoped<IIniciarNotaCreditoCompraUseCase, IniciarNotaCreditoCompraUseCase>();
+        services.AddScoped<ICreateNotaCreditoCompraUseCase, CreateNotaCreditoCompraUseCase>();
+        services.AddScoped<IAnularNotaCreditoCompraUseCase, AnularNotaCreditoCompraUseCase>();
+        services.AddScoped<ICreateRemitoCompraUseCase, CreateRemitoCompraUseCase>();
+        services.AddScoped<IAnularRemitoCompraUseCase, AnularRemitoCompraUseCase>();
+        services.AddScoped<IGetComprobantesCompraParaRemitirUseCase, GetComprobantesCompraParaRemitirUseCase>();
+        services.AddScoped<IIniciarOrdenCompraUseCase, IniciarOrdenCompraUseCase>();
+        services.AddScoped<ICreateOrdenCompraUseCase, CreateOrdenCompraUseCase>();
+        services.AddScoped<IUpdateOrdenCompraUseCase, UpdateOrdenCompraUseCase>();
+        services.AddScoped<IAnularOrdenCompraUseCase, AnularOrdenCompraUseCase>();
+        services.AddScoped<IIniciarCompraContadoUseCase, IniciarCompraContadoUseCase>();
+        services.AddScoped<ICreateCompraContadoUseCase, CreateCompraContadoUseCase>();
+        services.AddScoped<IAnularCompraContadoUseCase, AnularCompraContadoUseCase>();
+        services.AddScoped<IOrdenBancariaRepository, OrdenBancariaRepository>();
+        services.AddScoped<IIniciarOrdenBancariaUseCase, IniciarOrdenBancariaUseCase>();
+        services.AddScoped<ICreateOrdenDepositoUseCase, CreateOrdenDepositoUseCase>();
+        services.AddScoped<ICreateOrdenExtraccionUseCase, CreateOrdenExtraccionUseCase>();
+        services.AddScoped<IAnularOrdenBancariaUseCase, AnularOrdenBancariaUseCase>();
+        services.AddScoped<IMovimientoStockRepository, MovimientoStockRepository>();
+        services.AddScoped<IIniciarMovimientoStockUseCase, IniciarMovimientoStockUseCase>();
+        services.AddScoped<ICreateMovimientoStockUseCase, CreateMovimientoStockUseCase>();
+        services.AddScoped<IResolverMovimientoStockUseCase, ResolverMovimientoStockUseCase>();
+        services.AddScoped<IGetMovimientosStockEnTransitoUseCase, GetMovimientosStockEnTransitoUseCase>();
+        services.AddScoped<IGetMovimientoStockUseCase, GetMovimientoStockUseCase>();
+        services.AddScoped<IGetComprobantesCompraParaFacturarUseCase, GetComprobantesCompraParaFacturarUseCase>();
+        services.AddScoped<IGetLineasPendientesCompraUseCase, GetLineasPendientesCompraUseCase>();
+        services.AddScoped<IUsuarioAdminRepository, UsuarioAdminRepository>();
+        services.AddScoped<IGetUsuariosAdminUseCase, GetUsuariosAdminUseCase>();
+        services.AddScoped<IGetUsuarioAdminUseCase, GetUsuarioAdminUseCase>();
+        services.AddScoped<IGetUsuarioAdminOpcionesUseCase, GetUsuarioAdminOpcionesUseCase>();
+        services.AddScoped<ICreateUsuarioAdminUseCase, CreateUsuarioAdminUseCase>();
+        services.AddScoped<IUpdateUsuarioAdminUseCase, UpdateUsuarioAdminUseCase>();
+        services.AddScoped<ICambiarPasswordUseCase, CambiarPasswordUseCase>();
+        services.AddScoped<IGetRolesUseCase, GetRolesUseCase>();
+        services.AddScoped<ICreateRolUseCase, CreateRolUseCase>();
+        services.AddScoped<IRenombrarRolUseCase, RenombrarRolUseCase>();
+        services.AddScoped<IGetPlanillasCajaUseCase, GetPlanillasCajaUseCase>();
+        services.AddScoped<IGetPlanillaCajaResumenUseCase, GetPlanillaCajaResumenUseCase>();
+        services.AddScoped<IIniciarPlanillaCajaUseCase, IniciarPlanillaCajaUseCase>();
+        services.AddScoped<IAbrirPlanillaCajaUseCase, AbrirPlanillaCajaUseCase>();
+        services.AddScoped<IModificarPlanillaCajaUseCase, ModificarPlanillaCajaUseCase>();
+        services.AddScoped<IIniciarReciboUseCase, IniciarReciboUseCase>();
+        services.AddScoped<IGetComprobantesPendientesUseCase, GetComprobantesPendientesUseCase>();
+        services.AddScoped<IReciboCobroWriter, ReciboCobroWriter>();
+        services.AddScoped<ICreateReciboUseCase, CreateReciboUseCase>();
+        services.AddScoped<IAnularReciboUseCase, AnularReciboUseCase>();
+        services.AddScoped<IGetEntidadesRecibosAutomaticosUseCase, GetEntidadesRecibosAutomaticosUseCase>();
+        services.AddScoped<IGenerarRecibosAutomaticosUseCase, GenerarRecibosAutomaticosUseCase>();
+
+        services.AddScoped<IVentaRepository, VentaRepository>();
+        services.AddScoped<IVentaWriter, VentaWriter>();
+        services.AddScoped<IVentaAnulador, VentaAnulador>();
+        services.AddScoped<IIniciarVentaInternaUseCase, IniciarVentaInternaUseCase>();
+        services.AddScoped<ICreateVentaInternaUseCase, CreateVentaInternaUseCase>();
+        services.AddScoped<IAnularVentaInternaUseCase, AnularVentaInternaUseCase>();
+
+        // Factura electrónica: gateway AFIP de IDEAS SA (BaseUrl y contraseña por configuración secreta)
+        services.Configure<AfipGatewayOptions>(configuration.GetSection(AfipGatewayOptions.SectionName));
+        services.AddHttpClient<IAfipGateway, IdeasAfipGateway>((sp, client) =>
+        {
+            var afip = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AfipGatewayOptions>>().Value;
+            if (!string.IsNullOrWhiteSpace(afip.BaseUrl))
+                client.BaseAddress = new Uri(afip.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(afip.TimeoutSeconds);
+        });
+        services.AddScoped<IAutorizarFacturaElectronicaUseCase, AutorizarFacturaElectronicaUseCase>();
+        services.AddScoped<IIniciarPresupuestoUseCase, IniciarPresupuestoUseCase>();
+        services.AddScoped<ICreatePresupuestoUseCase, CreatePresupuestoUseCase>();
+        services.AddScoped<IUpdatePresupuestoUseCase, UpdatePresupuestoUseCase>();
+        services.AddScoped<IAnularPresupuestoUseCase, AnularPresupuestoUseCase>();
+        services.AddScoped<IIniciarRemitoUseCase, IniciarRemitoUseCase>();
+        services.AddScoped<ICreateRemitoUseCase, CreateRemitoUseCase>();
+        services.AddScoped<IAnularRemitoUseCase, AnularRemitoUseCase>();
+        services.AddScoped<IGetComprobantesParaRemitirUseCase, GetComprobantesParaRemitirUseCase>();
+        services.AddScoped<IGetLineasPendientesUseCase, GetLineasPendientesUseCase>();
+        services.AddScoped<IIniciarNotaCreditoUseCase, IniciarNotaCreditoUseCase>();
+        services.AddScoped<ICreateNotaCreditoUseCase, CreateNotaCreditoUseCase>();
+        services.AddScoped<IAutorizarNotaCreditoUseCase, AutorizarNotaCreditoUseCase>();
+        services.AddScoped<IAutorizarComprobanteElectronicoUseCase, AutorizarComprobanteElectronicoUseCase>();
+        services.AddScoped<IIniciarFacturaElectronicaUseCase, IniciarFacturaElectronicaUseCase>();
+        services.AddScoped<ICreateFacturaElectronicaUseCase, CreateFacturaElectronicaUseCase>();
+        services.AddScoped<IGetFacturasPendientesAfipUseCase, GetFacturasPendientesAfipUseCase>();
 
         return services;
     }

@@ -17,18 +17,4 @@ public static partial class UsuarioSucursalMappings
         IdUsuario = entity.IdUsuario,
         IdSucursal = entity.IdSucursal,
     };
-
-    public static Db.UsuariosSucursales ToEntity(this UsuarioSucursalDto dto)
-    {
-        var entity = new Db.UsuariosSucursales();
-        dto.ApplyTo(entity);
-        return entity;
-    }
-
-    /// <summary>Copia el Dto sobre la entidad (no toca la clave).</summary>
-    public static void ApplyTo(this UsuarioSucursalDto dto, Db.UsuariosSucursales entity)
-    {
-        entity.IdUsuario = dto.IdUsuario;
-        entity.IdSucursal = dto.IdSucursal;
-    }
 }
