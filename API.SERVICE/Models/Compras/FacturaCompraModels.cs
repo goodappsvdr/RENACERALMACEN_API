@@ -8,7 +8,7 @@ namespace API.SERVICE.Models.Compras;
 /// del proveedor. Suma stock (salvo lo que ya ingresó con un remito de compra), carga la deuda en la cta. cte. del proveedor
 /// y, si la sucursal es Responsable Inscripto, el libro IVA compras. Los importes se graban como llegan.
 /// </summary>
-public sealed class CreateFacturaCompraDto : ComprobanteCompraDtoBase
+public sealed class CreateFacturaCompraDto : ComprobanteProveedorDtoBase
 {
     [Required, MaxLength(1)] public string Letra { get; set; } = string.Empty;
 
@@ -20,7 +20,7 @@ public sealed class CreateFacturaCompraDto : ComprobanteCompraDtoBase
 /// Nota de crédito de proveedor (NCP) — FrmNotaCreditoProveedor. Mercadería devuelta o descuento del proveedor: resta stock, deja saldo
 /// a favor en la cta. cte. del proveedor (se usa en una orden de pago) y va al libro IVA compras como nota de crédito.
 /// </summary>
-public sealed class CreateNotaCreditoCompraDto : ComprobanteCompraDtoBase
+public sealed class CreateNotaCreditoCompraDto : ComprobanteProveedorDtoBase
 {
     [Required, MaxLength(1)] public string Letra { get; set; } = string.Empty;
 }
@@ -29,7 +29,7 @@ public sealed class CreateNotaCreditoCompraDto : ComprobanteCompraDtoBase
 /// Remito de compra (RC) — FrmRemitosCompra. Mercadería que entrega el proveedor: suma stock (salvo lo que ya ingresó con la factura)
 /// y queda pendiente de facturar. Letra R, como el ERP.
 /// </summary>
-public sealed class CreateRemitoCompraDto : ComprobanteCompraDtoBase
+public sealed class CreateRemitoCompraDto : ComprobanteProveedorDtoBase
 {
     /// <summary>Facturas de compra / órdenes de compra que se entregan con este remito.</summary>
     public List<ComprobanteRelacionadoDto> Comprobantes { get; set; } = [];
@@ -41,18 +41,33 @@ public sealed class CreateRemitoCompraDto : ComprobanteCompraDtoBase
     public DateTime? FechaVencimiento { get; set; }
 }
 
-/// <summary>Datos comunes a los comprobantes que emite el proveedor (factura, nota de crédito y remito).</summary>
-public abstract class ComprobanteCompraDtoBase
+/// <summary>Orden de compra (OC) — FrmOrdenCompraABM. Pedido al proveedor: no mueve stock ni cta. cte.; deja cada línea pendiente de recibir
+/// (remito de compra) o facturar. Letra X y numeración propia (NUMERACION/OC).</summary>
+public sealed class CreateOrdenCompraDto : ComprobanteCompraDtoBase
 {
-    [Required] public int? IdProveedor { get; set; }
+    /// <summary>Solo con numeración manual (NUMERACION/OC = 1).</summary>
+    [MaxLength(50)] public string? PuntoVenta { get; set; }
 
-    [Required] public int? IdSucursal { get; set; }
+    /// <summary>Solo con numeración manual (NUMERACION/OC = 1).</summary>
+    [MaxLength(50)] public string? Numero { get; set; }
+}
 
+/// <summary>Comprobante que numera el proveedor (factura, nota de crédito y remito): punto de venta y número son los suyos.</summary>
+public abstract class ComprobanteProveedorDtoBase : ComprobanteCompraDtoBase
+{
     [Required, RegularExpression(@"^\d{1,5}$", ErrorMessage = "Punto de venta: hasta 5 dígitos.")]
     public string PuntoVenta { get; set; } = string.Empty;
 
     [Required, RegularExpression(@"^\d{1,8}$", ErrorMessage = "Número: hasta 8 dígitos.")]
     public string Numero { get; set; } = string.Empty;
+}
+
+/// <summary>Datos comunes a los comprobantes de compra.</summary>
+public abstract class ComprobanteCompraDtoBase
+{
+    [Required] public int? IdProveedor { get; set; }
+
+    [Required] public int? IdSucursal { get; set; }
 
     [Required] public DateTime? FechaEmision { get; set; }
 

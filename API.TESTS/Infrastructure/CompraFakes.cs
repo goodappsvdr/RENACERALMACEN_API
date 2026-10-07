@@ -57,6 +57,25 @@ public sealed class FakeCompraRepository : ICompraRepository
 
     public HashSet<int> ConRelacionesComoOrigen { get; } = [];
 
+    public Task ModificarCabeceraAsync(int idDocumentoProveedor, CabeceraProveedorRow datos, CancellationToken cancellationToken = default)
+    {
+        if (Documentos.GetValueOrDefault(idDocumentoProveedor) is { } d)
+        {
+            d.IdProveedor = datos.IdProveedor;
+            d.TotalGeneral = datos.Total;
+        }
+        return Op($"ModificarCabecera {idDocumentoProveedor} proveedor={datos.IdProveedor} total={datos.Total:0.##}");
+    }
+
+    public Task BorrarDetallesAsync(int idDocumentoProveedor, CancellationToken cancellationToken = default)
+    {
+        Detalles.RemoveAll(d => d.IdDocumentoProveedor == idDocumentoProveedor);
+        return Op($"BorrarDetalles {idDocumentoProveedor}");
+    }
+
+    public Task AnularDetallesAsync(int idDocumentoProveedor, int estadoLibroIva, CancellationToken cancellationToken = default) =>
+        Op($"AnularDetalles {idDocumentoProveedor}");
+
     public Task SetPendienteAsync(int idDocumentoProveedor, bool pendiente, CancellationToken cancellationToken = default) =>
         Op($"Pendiente {idDocumentoProveedor}={pendiente}");
 

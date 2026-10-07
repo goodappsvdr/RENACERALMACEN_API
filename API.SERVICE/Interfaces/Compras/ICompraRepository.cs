@@ -38,6 +38,15 @@ public interface ICompraRepository
     /// <summary>DocumentosProveedor_ModificarEstado_Pendiente.</summary>
     Task SetEstadoPendienteAsync(int idDocumentoProveedor, int estado, bool pendiente, CancellationToken cancellationToken = default);
 
+    /// <summary>DocumentosProveedor_Modificar_OrdenCompra: proveedor, datos impresos y totales.</summary>
+    Task ModificarCabeceraAsync(int idDocumentoProveedor, CabeceraProveedorRow datos, CancellationToken cancellationToken = default);
+
+    /// <summary>DocumentosProveedorDetalle_EliminarPorID_DocumentoProveedor.</summary>
+    Task BorrarDetallesAsync(int idDocumentoProveedor, CancellationToken cancellationToken = default);
+
+    /// <summary>DocumentosProveedorDetalle_Anular de todas las líneas del comprobante.</summary>
+    Task AnularDetallesAsync(int idDocumentoProveedor, int estadoLibroIva, CancellationToken cancellationToken = default);
+
     /// <summary>Solo el flag Pendiente (sin tocar el estado, que en una factura refleja el pago).</summary>
     Task SetPendienteAsync(int idDocumentoProveedor, bool pendiente, CancellationToken cancellationToken = default);
 
@@ -65,3 +74,7 @@ public interface ICompraRepository
 }
 
 public sealed record LineaPendienteCompraRow(Db.DocumentosProveedorDetalle Detalle, int IdComprobanteTipo, decimal Saldo);
+
+public sealed record CabeceraProveedorRow(
+    int IdProveedor, string? RazonSocial, int? IdCategoriaIva, string? NroDoc, int? IdProvincia, int? IdLocalidad, string? Calle,
+    decimal Neto, decimal Iva, decimal Otros, decimal Total);

@@ -1,5 +1,6 @@
 using API.SERVICE.Models.Common;
 using API.SERVICE.Models.Compras;
+using API.SERVICE.Models.Ventas;
 using API.SERVICE.UseCases.Compras;
 using Microsoft.AspNetCore.Mvc;
 
@@ -123,6 +124,51 @@ public sealed partial class DocumentoProveedorController
     [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AnularRemito(int id, [FromServices] IAnularRemitoCompraUseCase useCase, CancellationToken cancellationToken)
+    {
+        await useCase.ExecuteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Planilla de caja abierta, punto de venta y número sugerido para una orden de compra (letra X).</summary>
+    [HttpGet("orden-compra/nueva")]
+    [ProducesResponseType(typeof(NuevaVentaInternaDisplay), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<NuevaVentaInternaDisplay>> NuevaOrdenCompra([FromServices] IIniciarOrdenCompraUseCase useCase, CancellationToken cancellationToken) =>
+        Ok(await useCase.ExecuteAsync(cancellationToken));
+
+    /// <summary>Alta de orden de compra: cabecera y líneas pendientes de recibir / facturar. No mueve stock ni cta. cte.</summary>
+    [HttpPost("orden-compra")]
+    [ProducesResponseType(typeof(DocumentoProveedorDisplay), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DocumentoProveedorDisplay>> CreateOrdenCompra(
+        [FromBody] CreateOrdenCompraDto dto, [FromServices] ICreateOrdenCompraUseCase useCase, CancellationToken cancellationToken)
+    {
+        var orden = await useCase.ExecuteAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = orden.IdDocumentoProveedor }, orden);
+    }
+
+    /// <summary>Modificación: cabecera y reemplazo de las líneas (punto de venta y número del body se ignoran). 409 si no está GENERADA o ya se recibió / facturó algo.</summary>
+    [HttpPut("orden-compra/{id:int}")]
+    [ProducesResponseType(typeof(DocumentoProveedorDisplay), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<DocumentoProveedorDisplay>> UpdateOrdenCompra(
+        int id, [FromBody] CreateOrdenCompraDto dto, [FromServices] IUpdateOrdenCompraUseCase useCase, CancellationToken cancellationToken) =>
+        Ok(await useCase.ExecuteAsync(id, dto, cancellationToken));
+
+    /// <summary>Anulación de orden de compra: líneas, saldos y comprobante. 409 si no está GENERADA o ya se recibió / facturó algo.</summary>
+    [HttpPost("orden-compra/{id:int}/anular")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AnularOrdenCompra(int id, [FromServices] IAnularOrdenCompraUseCase useCase, CancellationToken cancellationToken)
     {
         await useCase.ExecuteAsync(id, cancellationToken);
         return NoContent();

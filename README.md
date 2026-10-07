@@ -505,6 +505,22 @@ Diferencias **intencionales** con el ERP:
 - Anulación bloqueada si la nota ya se usó en una orden de pago (su saldo dejó de ser el total a favor).
 - Mismos arreglos que la factura: control de duplicados que funciona, borrados por la clave correcta, `Otros` por línea.
 
+### Órdenes de compra — OC (`/api/DocumentoProveedor`)
+
+Port de `FrmOrdenCompraABM`. **Sin uso en producción**. Espejo del presupuesto: `GET orden-compra/nueva`, `POST orden-compra`,
+`PUT orden-compra/{id}`, `POST orden-compra/{id}/anular`. Letra X y numeración propia (`NUMERACION/OC`); no mueve stock ni cta. cte.:
+cada línea queda con saldo pendiente (`Total = Saldo = cantidad`, `Saldo2 = 0`) para recibirla con un remito de compra o facturarla.
+
+Diferencias **intencionales** con el ERP:
+- **La anulación del ERP anulaba una venta.** `Anular_Ws` usaba las clases de ventas (`DocumentosCliente`, `DocumentosClienteDetalle`)
+  con el ID de la orden: si existía un comprobante de venta con ese mismo ID en estado GENERADO, lo anulaba y daba de baja sus líneas,
+  sin devolver stock ni cta. cte. Acá se anula la orden en `DocumentosProveedor`. **Conviene corregirlo en el WebForms** antes de que
+  alguien use órdenes de compra: con 130.000 ventas, los IDs bajos de cualquier orden nueva coinciden con ventas reales.
+- Modificar y anular solo en GENERADA y sin nada recibido ni facturado (el ERP no validaba nada al modificar).
+- Al anular, los saldos quedan en 0 (si no, la orden anulada seguiría ofreciendo líneas para recibir o facturar).
+- Numeración manual según `NUMERACION/OC` (el ERP consultaba `NUMERACION/PV`, la de presupuestos).
+- `ComprobantesCarga` guarda la orden (el ERP guardaba el ID de usuario en `ID_Comprobante`).
+
 ### Remitos de compra — RC (`/api/DocumentoProveedor`)
 
 Port de `FrmRemitosCompra`. **Sin uso en producción**. Espejo del remito de venta, con el mismo código compartido de compras:
@@ -563,6 +579,6 @@ Diferencias **intencionales** con el ERP:
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: resto del circuito de compras (orden de compra, compra con pago),
+transaccionales: compra con pago en el momento (COM + OP),
 ajustes y movimientos de stock, depósitos/extracciones, conciliación
 bancaria.

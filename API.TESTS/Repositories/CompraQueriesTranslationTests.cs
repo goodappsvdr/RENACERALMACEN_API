@@ -58,12 +58,18 @@ public class CompraQueriesTranslationTests
         await _repo.BorrarLibroIvaAsync(450, 4);
         await _repo.BorrarOtrosTributosAsync(450, 4);
         await _repo.SetPendienteAsync(450, true);
+        await _repo.ModificarCabeceraAsync(410, new API.SERVICE.Interfaces.Compras.CabeceraProveedorRow(5, "PROV", 2, "30", 1, 2, "CALLE", 100, 21, 0, 121));
+        await _repo.BorrarDetallesAsync(410);
+        await _repo.AnularDetallesAsync(410, 99);
 
-        _interceptor.Commands.Should().HaveCount(8);
+        _interceptor.Commands.Should().HaveCount(11);
+        _interceptor.Commands.ElementAt(8).Should().StartWith("UPDATE").And.Contain("[TotalGeneral] = @").And.NotContain("[Numero]");
+        _interceptor.Commands.ElementAt(9).Should().StartWith("DELETE").And.Contain("[DocumentosProveedorDetalle]");
+        _interceptor.Commands.ElementAt(10).Should().StartWith("UPDATE").And.Contain("[DocumentosProveedorDetalle]").And.Contain("[EstadoLibroIVA] = @");
         _interceptor.Commands.ElementAt(0).Should().StartWith("DELETE").And.Contain("[ID_DocumentoProveedorRemito] = @", "el SP del ERP borraba por otra columna");
         _interceptor.Commands.ElementAt(5).Should().StartWith("DELETE").And.Contain("[TxtComprasAlicuotas]").And.Contain("[ID_ComprobanteTipo] = @",
             "el SP del ERP comparaba la columna consigo misma");
         _interceptor.Commands.ElementAt(6).Should().StartWith("DELETE").And.Contain("[DocumentosProveedorOtrosTributos]");
-        LastSql.Should().StartWith("UPDATE").And.Contain("[Pendiente] = @").And.NotContain("[Estado]");
+        _interceptor.Commands.ElementAt(7).Should().StartWith("UPDATE").And.Contain("[Pendiente] = @").And.NotContain("[Estado]");
     }
 }

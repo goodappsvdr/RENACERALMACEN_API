@@ -79,6 +79,31 @@ public sealed class CompraRepository : ICompraRepository
         _context.DocumentosProveedor.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor)
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.Estado, estado).SetProperty(d => d.Pendiente, pendiente), cancellationToken);
 
+    public Task ModificarCabeceraAsync(int idDocumentoProveedor, CabeceraProveedorRow datos, CancellationToken cancellationToken = default) =>
+        _context.DocumentosProveedor.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.IdProveedor, datos.IdProveedor)
+                .SetProperty(d => d.RazonSocial, datos.RazonSocial)
+                .SetProperty(d => d.IdCategoriaIva, datos.IdCategoriaIva)
+                .SetProperty(d => d.NroDoc, datos.NroDoc)
+                .SetProperty(d => d.IdProvincia, datos.IdProvincia)
+                .SetProperty(d => d.IdLocalidad, datos.IdLocalidad)
+                .SetProperty(d => d.Calle, datos.Calle)
+                .SetProperty(d => d.TotalNeto, datos.Neto)
+                .SetProperty(d => d.TotalIva, datos.Iva)
+                .SetProperty(d => d.TotalOtrosImpuestos, datos.Otros)
+                .SetProperty(d => d.TotalGeneral, datos.Total), cancellationToken);
+
+    public Task BorrarDetallesAsync(int idDocumentoProveedor, CancellationToken cancellationToken = default) =>
+        _context.DocumentosProveedorDetalle.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor).ExecuteDeleteAsync(cancellationToken);
+
+    public Task AnularDetallesAsync(int idDocumentoProveedor, int estadoLibroIva, CancellationToken cancellationToken = default) =>
+        _context.DocumentosProveedorDetalle.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.Descripcion, "COMPROBANTE ANULADO")
+                .SetProperty(d => d.EstadoLibroIva, estadoLibroIva)
+                .SetProperty(d => d.Observaciones, "COMPROBANTE ANULADO"), cancellationToken);
+
     public Task SetPendienteAsync(int idDocumentoProveedor, bool pendiente, CancellationToken cancellationToken = default) =>
         _context.DocumentosProveedor.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor)
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.Pendiente, pendiente), cancellationToken);

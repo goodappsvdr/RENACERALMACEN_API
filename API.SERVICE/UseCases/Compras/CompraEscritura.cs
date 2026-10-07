@@ -37,7 +37,7 @@ internal sealed class CompraEscritura
     /// <summary>Proveedor, sucursal, letra válida, número no registrado y planilla abierta del usuario.</summary>
     /// <param name="validarLetra">False para el remito de compra: siempre R y sin filas en ComprobantesLetras.</param>
     public async Task<ComprobanteCompraPreparado> PrepararAsync(
-        ComprobanteCompraDtoBase dto, string letraPedida, int tipo, string nombre, int idUsuario, CancellationToken ct, bool validarLetra = true)
+        ComprobanteProveedorDtoBase dto, string letraPedida, int tipo, string nombre, int idUsuario, CancellationToken ct, bool validarLetra = true)
     {
         var idProveedor = dto.IdProveedor!.Value;
         var proveedor = await _comprobantes.GetEntidadAsync(idProveedor, ct) ?? throw new NotFoundException($"Proveedor {idProveedor} no existe.");
