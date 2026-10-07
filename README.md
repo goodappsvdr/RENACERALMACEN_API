@@ -613,8 +613,39 @@ si deberían). Diferencias **intencionales** con el ERP:
 - Anulación solo una vez (el ERP no controlaba el estado y repetía los efectos); `Total` de la orden calculado en el servidor.
 - Ojo con los parámetros: `COMPROBANTE/OE` = 21 es el mismo ID que FVC; la API respeta lo que diga la tabla de parámetros.
 
+### Transferencias de stock entre sucursales — MS (`/api/MovimientoStock`)
+
+Reemplaza a `FrmMovimientoStockABM` / `FrmMovimientoStockRecibirABM`. **Nunca se usó en producción** (0 comprobantes MS, 0
+movimientos) y el legacy no funcionaba (ver abajo), así que **no es un port literal**: se rediseñó como transferencia en dos pasos
+con los estados que ya existen en DOCUMENTOSCLIENTE.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET nuevo?idSucursalOrigen=` | Punto de venta de la sucursal de origen (por defecto la del usuario) y número sugerido (letra M, `NUMERACION/MS`). |
+| `GET en-transito?idSucursalDestino=` | Lo que le enviaron a la sucursal (por defecto la del usuario) y falta recibir. |
+| `GET {id}` | Movimiento con sus ítems. |
+| `POST` | **Envío**: descuenta del stock de la sucursal de origen y queda **GENERADO** (en tránsito). |
+| `POST {id}/recibir` | El destino lo recibe: suma a su stock → **CONFIRMADO**. |
+| `POST {id}/rechazar` | El destino no lo acepta: vuelve al stock del origen → **RECHAZADO**. |
+| `POST {id}/anular` | El origen lo cancela antes de que lo reciban: vuelve a su stock → **ANULADO**. |
+
+- Solo se mueve `ItemsSucursales.Stock` (y `ItemsMovimientosDetalles` por cada salida / entrada): `Items.StockActual` no cambia,
+  porque una transferencia no altera el stock total de la empresa. Mientras está en tránsito la mercadería no figura en ninguna sucursal.
+- Validaciones del envío: origen ≠ destino, ítems que mueven stock y habilitados en las dos sucursales, y **stock suficiente en el
+  origen** (lock por sucursal de origen para que dos envíos simultáneos no usen el mismo stock). Líneas repetidas del mismo ítem se suman.
+- Permisos: enviar / anular quien opera la sucursal de origen; ver en tránsito / recibir / rechazar quien opera la de destino. "Opera" =
+  es su sucursal, la tiene en `UsuariosSucursales`, o es ADMINISTRADOR / CEO.
+- Recibir, rechazar y anular solo sobre GENERADO, con actualización condicional (409 si otro ya lo resolvió). Un movimiento recibido no se
+  anula: se hace una transferencia inversa.
+- Columnas: origen en `ID_Sucursal`, destino en `ID_Cliente` (donde lo guardaba el ERP; la tabla no tiene otra) con su nombre en
+  `RazonSocial`, e `ID_Usuario` = el usuario real. Sin caja (`ID_PlanillaCaja = 0`) ni importes. No maneja números de serie (el ERP los
+  marcaba NO DISPONIBLE pero nunca cambiaba su sucursal).
+
+Lo que tenía el ERP: el combo de empresas consulta `EmpresaSucursales`, una tabla que no existe; la sucursal de origen se guardaba en
+`ID_Usuario`; el alta descontaba del origen y la confirmación volvía a descontarlo (doble descuento) antes de sumar al destino; la
+anulación devolvía el stock usando columnas del detalle que no existen.
+
 ## Pendiente (próximos tickets)
 
-Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: movimientos de stock entre sucursales (`FrmMovimientoStockABM` / `FrmMovimientoStockRecibir`). Sin portar a propósito por no tener uso: ajuste de stock y
+Todos los flujos compuestos del WebForms están portados. Sin portar a propósito por no tener uso: ajuste de stock y
 ajustes de caja. `FrmConciliacionBancaria` es una copia de la pantalla de facturas: no hay conciliación bancaria que portar.
