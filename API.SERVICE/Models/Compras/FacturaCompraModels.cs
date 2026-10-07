@@ -8,7 +8,20 @@ namespace API.SERVICE.Models.Compras;
 /// del proveedor. Suma stock (salvo lo que ya ingresó con un remito de compra), carga la deuda en la cta. cte. del proveedor
 /// y, si la sucursal es Responsable Inscripto, el libro IVA compras. Los importes se graban como llegan.
 /// </summary>
-public sealed class CreateFacturaCompraDto
+public sealed class CreateFacturaCompraDto : ComprobanteCompraDtoBase
+{
+    /// <summary>Remitos de compra / órdenes de compra que se facturan.</summary>
+    public List<ComprobanteRelacionadoDto> Comprobantes { get; set; } = [];
+}
+
+/// <summary>
+/// Nota de crédito de proveedor (NCP) — FrmNotaCreditoProveedor. Mercadería devuelta o descuento del proveedor: resta stock, deja saldo
+/// a favor en la cta. cte. del proveedor (se usa en una orden de pago) y va al libro IVA compras como nota de crédito.
+/// </summary>
+public sealed class CreateNotaCreditoCompraDto : ComprobanteCompraDtoBase;
+
+/// <summary>Datos comunes a los comprobantes que emite el proveedor (factura y nota de crédito).</summary>
+public abstract class ComprobanteCompraDtoBase
 {
     [Required] public int? IdProveedor { get; set; }
 
@@ -53,9 +66,6 @@ public sealed class CreateFacturaCompraDto
 
     /// <summary>Percepciones, impuestos internos, IIBB, etc. (DocumentosProveedorOtrosTributos).</summary>
     public List<OtroTributoDto> OtrosTributos { get; set; } = [];
-
-    /// <summary>Remitos de compra / órdenes de compra que se facturan.</summary>
-    public List<ComprobanteRelacionadoDto> Comprobantes { get; set; } = [];
 }
 
 public sealed class FacturaCompraItemDto

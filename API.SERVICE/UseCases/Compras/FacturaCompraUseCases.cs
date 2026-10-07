@@ -90,8 +90,6 @@ public interface ICreateFacturaCompraUseCase
 /// </summary>
 public sealed class CreateFacturaCompraUseCase : ICreateFacturaCompraUseCase
 {
-    private const int IdEmpresa = 1;
-
     private readonly ICompraRepository _compras;
     private readonly IVentaRepository _stock;
     private readonly IReciboCobroRepository _comprobantes;
@@ -125,109 +123,30 @@ public sealed class CreateFacturaCompraUseCase : ICreateFacturaCompraUseCase
             throw new BusinessException("Agregue al menos un ítem a la factura de compra.");
 
         var idProveedor = dto.IdProveedor!.Value;
-        var idSucursal = dto.IdSucursal!.Value;
-        var puntoVenta = dto.PuntoVenta.PadLeft(4, '0');
-        var numero = dto.Numero.PadLeft(8, '0');
-        var letra = dto.Letra.ToUpperInvariant();
+        var escritura = new CompraEscritura(_compras, _stock, _comprobantes, _referencias);
 
         var factura = await _unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
             await _comprobantes.BloquearEntidadAsync(idProveedor, ct);
 
             var t = await CompraContexto.TiposAsync(_referencias, ct);
-            var proveedor = await _comprobantes.GetEntidadAsync(idProveedor, ct)
-                ?? throw new NotFoundException($"Proveedor {idProveedor} no existe.");
-            var sucursal = await _stock.GetSucursalAsync(idSucursal, ct)
-                ?? throw new NotFoundException($"Sucursal {idSucursal} no existe.");
-            var idCategoriaIva = dto.IdCategoriaIva ?? proveedor.IdCategoriaIva ?? 1;
-
-            var letras = await _compras.GetLetrasAsync(t.Fc, sucursal.IdCategoriaIva ?? 0, idCategoriaIva, ct);
-            if (!letras.Contains(letra))
-                throw new BusinessException($"La letra {letra} no corresponde a una compra de esta sucursal a un proveedor de esa categoría de IVA (válidas: {string.Join(", ", letras)}).");
-
-            var anulado = await CompraContexto.EstadoAsync(_referencias, "ANULADO", ct);
-            if (await _compras.ExisteDuplicadoAsync(idProveedor, t.Fc, puntoVenta, numero, anulado, ct))
-                throw new ConflictException($"La factura {letra}-{puntoVenta}-{numero} de este proveedor ya fue registrada.");
-
-            var planilla = await _compras.GetPlanillaAbiertaAsync(idUsuario, await _referencias.IdAsync(EstadosCobranza.PlanillaAbierta, ct), ct)
-                ?? throw new BusinessException("No posee una planilla de caja abierta.");
-
-            var origenes = await ValidarOrigenesAsync(dto, idProveedor, t, anulado, ct);
+            var p = await escritura.PrepararAsync(dto, t.Fc, "factura", idUsuario, ct);
+            var origenes = await ValidarOrigenesAsync(dto, idProveedor, t, await CompraContexto.EstadoAsync(_referencias, "ANULADO", ct), ct);
 
             var ahora = await _clock.GetNowAsync(ct);
-            var fecha = dto.FechaEmision!.Value;
-            var concepto = VentaRules.Concepto("FC", letra, puntoVenta, numero);
-
-            var doc = new Db.DocumentosProveedor
-            {
-                IdComprobanteTipo = t.Fc,
-                IdCondicion = VentaRules.Condicion,
-                Letra = letra,
-                IdPuntoVenta = int.Parse(puntoVenta),
-                PuntoVenta = puntoVenta,
-                Numero = numero,
-                IdProveedor = idProveedor,
-                RazonSocial = VentaRules.Truncar(dto.RazonSocial ?? proveedor.RazonSocial, 50),
-                IdCategoriaIva = idCategoriaIva,
-                NroDoc = VentaRules.Truncar(dto.Cuit ?? proveedor.Cuit, 50),
-                IdProvincia = dto.IdProvincia ?? proveedor.IdProvincia,
-                IdLocalidad = dto.IdLocalidad ?? proveedor.IdLocalidad,
-                Calle = VentaRules.Truncar(dto.Calle ?? proveedor.Direccion, 50),
-                Nro = "0",
-                TotalNeto = dto.Neto,
-                TotalIva = dto.Iva,
-                TotalOtrosImpuestos = dto.Otros,
-                TotalGeneral = dto.Total,
-                FechaEmision = fecha,
-                IdUsuario = idUsuario,
-                IdEmpresa = IdEmpresa,
-                IdPlanillaCaja = planilla.IdPlanillaCaja,
-                Estado = await CompraContexto.EstadoAsync(_referencias, "GENERADO", ct),
-                Cae = "0",
-                VtoCae = fecha.Date,
-                IdTransporte = dto.IdTransporte,
-                Transporte = dto.Transporte ?? string.Empty,
-                IdUnidad = dto.IdUnidad,
-                Unidad = dto.Unidad ?? string.Empty,
-                IdChofer = dto.IdChofer,
-                Chofer = dto.Chofer ?? string.Empty,
-                IdRemito = 0,
-                IdSucursal = idSucursal,
-                TotalDescuento = dto.TotalDescuento,
-                PorcentajeDescuento = dto.PorcentajeDescuento,
-                Remitar = false,
-                Facturar = false,
-                Pendiente = false,
-            };
-            _compras.Add(doc);
-            await _compras.SaveChangesAsync(ct);
-
-            if (!string.IsNullOrEmpty(dto.Observaciones))
-                _compras.Add(new Db.DocumentosProveedorObservaciones { IdDocumentoProveedor = doc.IdDocumentoProveedor, Observaciones = dto.Observaciones });
+            var concepto = VentaRules.Concepto("FC", p.Letra, p.PuntoVenta, p.Numero);
+            var doc = await escritura.GrabarCabeceraAsync(dto, p, t.Fc, idUsuario, ct);
 
             var estadoLibroActivo = await _referencias.GetIdEstadoAsync("LIBROIVAVENTAS", "ACTIVO", ct);
             var serieDisponible = await _referencias.GetIdEstadoAsync("ITEMSNROSERIE", "DISPONIBLE", ct);
             foreach (var item in dto.Items)
-                await GrabarItemAsync(item, doc, origenes, t, idUsuario, concepto, ahora, estadoLibroActivo, serieDisponible, ct);
+                await GrabarItemAsync(escritura, item, doc, origenes, t, idUsuario, concepto, ahora, estadoLibroActivo, serieDisponible, ct);
 
-            foreach (var tributo in dto.OtrosTributos)
-                _compras.Add(new Db.DocumentosProveedorOtrosTributos
-                {
-                    IdDocumentoProveedor = doc.IdDocumentoProveedor,
-                    IdComprobanteTipo = t.Fc,
-                    IdOtroTributo = tributo.IdTributo,
-                    Detalle = VentaRules.Truncar(tributo.Detalle ?? string.Empty, 50),
-                    BaseImponible = tributo.BaseImponible,
-                    Alicuota = tributo.Alicuota,
-                    Total = tributo.Importe,
-                });
-
+            escritura.GrabarTributos(dto, doc, t.Fc);
             await ActualizarOrigenesAsync(doc.IdDocumentoProveedor, origenes.Values, t, ct);
-
-            if (sucursal.IdCategoriaIva == await _referencias.GetIdCategoriaAsync("CATIVA", "RESP. INSCRIPTO", ct))
-                await RegistrarLibroIvaAsync(doc, dto, t.Fc, ct);
-
-            await RegistrarCtaCteAsync(doc, t.Fc, concepto, idUsuario, ct);
+            if (p.SucursalInscripta)
+                await escritura.RegistrarLibroIvaAsync(doc, dto, t.Fc, "FACTURA", ct);
+            await escritura.RegistrarCtaCteAsync(doc, t.Fc, concepto, idUsuario, credito: false, ct);
 
             await _compras.SaveChangesAsync(ct);
             return doc;
@@ -278,55 +197,21 @@ public sealed class CreateFacturaCompraUseCase : ICreateFacturaCompraUseCase
     }
 
     private async Task GrabarItemAsync(
-        FacturaCompraItemDto item, Db.DocumentosProveedor doc, IReadOnlyDictionary<int, Db.DocumentosProveedor> origenes, CompraContexto.Tipos t,
-        int idUsuario, string concepto, DateTime ahora, int estadoLibroActivo, int serieDisponible, CancellationToken ct)
+        CompraEscritura escritura, FacturaCompraItemDto item, Db.DocumentosProveedor doc, IReadOnlyDictionary<int, Db.DocumentosProveedor> origenes,
+        CompraContexto.Tipos t, int idUsuario, string concepto, DateTime ahora, int estadoLibroActivo, int serieDisponible, CancellationToken ct)
     {
         var idItem = item.IdItem!.Value;
         var descripcion = item.Descripcion.ToUpperInvariant();
         var cantidad = item.Cantidad;
         var idSucursal = doc.IdSucursal ?? 0;
-
-        var detalle = new Db.DocumentosProveedorDetalle
-        {
-            IdDocumentoProveedor = doc.IdDocumentoProveedor,
-            IdItem = idItem,
-            Descripcion = descripcion,
-            Cantidad = cantidad,
-            ListaPrecio = item.ListaPrecio ?? string.Empty,
-            PrecioUnitario = item.PrecioUnitario,
-            Neto = item.PrecioNeto,
-            Ivaalic = item.IvaAlicuota,
-            Iva = item.Iva,
-            Otros = item.Otros, // el ERP grababa el "Otros" de la cabecera en cada línea
-            Total = item.Total,
-            IdImpuestoIva = item.IdImpuestoIva,
-            IdListaPrecio = 1,
-            Metros = 0,
-            EstadoLibroIva = estadoLibroActivo,
-            Observaciones = string.Empty,
-            Bonificacion = item.Bonificacion,
-        };
-        _compras.Add(detalle);
-        await _compras.SaveChangesAsync(ct);
-
-        if (!string.IsNullOrWhiteSpace(item.NroSerie))
-            _compras.Add(new Db.ItemsNroSeries
-            {
-                IdItem = idItem,
-                NroSerie = item.NroSerie.Trim(),
-                IdComprobanteTipo = t.Fc,
-                IdComprobante = doc.IdDocumentoProveedor,
-                IdDocumentoClienteDetalle = (int)detalle.IdDocumentoProveedorDetalle,
-                IdSucursal = idSucursal,
-                Estado = serieDisponible,
-            });
+        var detalle = await escritura.GrabarDetalleAsync(item, doc, t.Fc, estadoLibroActivo, serieDisponible, ct);
+        var idDetalle = (int)detalle.IdDocumentoProveedorDetalle;
 
         var relacion = item.Relacion is { IdDocumentoCliente: > 0 } r ? r : null;
-        var idDetalle = (int)detalle.IdDocumentoProveedorDetalle;
         if (relacion is null)
         {
-            AgregarStockDetalle(doc, t.Fc, concepto, idItem, cantidad, cantidad, cantidad, idDetalle, 0, 0, 0);
-            await SumarStockAsync(idItem, idSucursal, cantidad, doc.IdDocumentoProveedor, t.Fc, idDetalle, idUsuario, concepto, descripcion, ahora, ct);
+            escritura.AgregarStockDetalle(doc, t.Fc, concepto, idItem, cantidad, cantidad, cantidad, idDetalle, 0, 0, 0);
+            await escritura.MoverStockAsync(true, idItem, idSucursal, cantidad, doc.IdDocumentoProveedor, t.Fc, idDetalle, idUsuario, concepto, descripcion, ahora, ct);
             return;
         }
 
@@ -338,12 +223,12 @@ public sealed class CreateFacturaCompraUseCase : ICreateFacturaCompraUseCase
         if (tipoRel != t.Oc)
         {
             // Remito de compra: el stock ya ingresó con el remito.
-            AgregarStockDetalle(doc, t.Fc, concepto, idItem, cantidad, 0, -cantidad, idDetalle, idRel, tipoRel, detRel);
+            escritura.AgregarStockDetalle(doc, t.Fc, concepto, idItem, cantidad, 0, -cantidad, idDetalle, idRel, tipoRel, detRel);
             return;
         }
 
-        AgregarStockDetalle(doc, t.Fc, concepto, idItem, cantidad, cantidad, cantidad, idDetalle, idRel, tipoRel, detRel);
-        await SumarStockAsync(idItem, idSucursal, cantidad, doc.IdDocumentoProveedor, t.Fc, idDetalle, idUsuario, concepto, descripcion, ahora, ct);
+        escritura.AgregarStockDetalle(doc, t.Fc, concepto, idItem, cantidad, cantidad, cantidad, idDetalle, idRel, tipoRel, detRel);
+        await escritura.MoverStockAsync(true, idItem, idSucursal, cantidad, doc.IdDocumentoProveedor, t.Fc, idDetalle, idUsuario, concepto, descripcion, ahora, ct);
     }
 
     /// <summary>Estado de cada remito / orden facturada y relación; la factura queda para remitir si no viene de un remito.</summary>
@@ -370,155 +255,6 @@ public sealed class CreateFacturaCompraUseCase : ICreateFacturaCompraUseCase
         }
     }
 
-    /// <summary>Libro IVA compras + TxtComprasAlicuotas por alícuota, con la misma asignación de tributos que el ERP.</summary>
-    private async Task RegistrarLibroIvaAsync(Db.DocumentosProveedor doc, CreateFacturaCompraDto dto, int fc, CancellationToken ct)
-    {
-        var iva = AfipRules.AgruparIva(dto.Items.Select(i => (i.IdImpuestoIva, i.PrecioNeto, i.Iva)), porcentajeDescuento: 0);
-        decimal Tributos(params int[] ids) => dto.OtrosTributos.Where(x => ids.Contains(x.IdTributo ?? 0)).Sum(x => x.Importe);
-
-        var tipoComp = await _referencias.GetParametroEnteroAsync("AFIP", $"FACTURA {doc.Letra}", ct);
-        var fecha = doc.FechaEmision!.Value;
-        _compras.Add(new Db.LibroIvaCompra
-        {
-            FechaEmision = DateOnly.FromDateTime(fecha),
-            TipoComprobante = tipoComp.ToString(),
-            Letra = doc.Letra,
-            PuntoVenta = doc.PuntoVenta,
-            Numero = doc.Numero,
-            RazonSocial = doc.RazonSocial,
-            NroDocumento = doc.NroDoc,
-            TotalGeneral = dto.Total,
-            TotalNeto = dto.Neto,
-            TotalIva = dto.Iva,
-            Neto21 = iva.Neto21,
-            Neto10 = iva.Neto105,
-            Neto27 = iva.Neto27,
-            NetoExento = iva.NetoExento,
-            Iva21 = iva.Iva21,
-            Iva10 = iva.Iva105,
-            Iva27 = iva.Iva27,
-            IvaExcento = 0,
-            IngBruto = Tributos(5),
-            Percepciones = Tributos(7, 8, 9),
-            ImpNacional = Tributos(1),
-            ImpMunicipal = Tributos(3),
-            ImpInterno = dto.Items.Sum(i => i.Otros) + Tributos(4),
-            OtrosTributo = Tributos(18),
-            Mes = fecha.Month,
-            Anio = fecha.Year,
-            IdComprobante = doc.IdDocumentoProveedor,
-            IdComprobanteTipo = fc,
-        });
-
-        var cuit = doc.NroDoc ?? string.Empty;
-        var (docTipoNombre, _) = AfipRules.Documento(cuit);
-        var docTipo = await _referencias.GetParametroEnteroAsync("DOCTIPO", docTipoNombre == "SIN IDENTIFICAR" ? "CUIT" : docTipoNombre, ct);
-        foreach (var a in iva.ParaAfip().Concat(iva.NetoExento > 0 ? [new AfipAlicuota(3, iva.NetoExento, 0)] : []))
-            _compras.Add(new Db.TxtComprasAlicuotas
-            {
-                TipoComprobante = tipoComp.ToString().PadLeft(3, '0'),
-                PuntoVenta = (doc.PuntoVenta ?? string.Empty).PadLeft(5, '0'),
-                NroComprobante = (doc.Numero ?? string.Empty).PadLeft(20, '0'),
-                CodVendedor = docTipo.ToString(),
-                CuitVendedor = cuit.PadLeft(20, '0'),
-                NetoGravado = a.BaseImponible,
-                Alicuota = a.Id.ToString().PadLeft(4, '0'),
-                ImporteLiquidado = a.Importe,
-                Mes = fecha.Month,
-                Anio = fecha.Year,
-                FechaAlta = DateOnly.FromDateTime(fecha),
-                IdComprobante = doc.IdDocumentoProveedor,
-                IdComprobanteTipo = fc,
-            });
-    }
-
-    /// <summary>Deuda con el proveedor: saldo = total, Total2 negativo (EntidadesCtaCte_Agregar + movimiento).</summary>
-    private async Task RegistrarCtaCteAsync(Db.DocumentosProveedor doc, int fc, string concepto, int idUsuario, CancellationToken ct)
-    {
-        var fecha = doc.FechaEmision!.Value;
-        var total = doc.TotalGeneral ?? 0m;
-        var ctaCte = new Db.EntidadesCtaCte
-        {
-            IdEntidad = doc.IdProveedor,
-            IdComprobanteTipo = fc,
-            IdComprobante = doc.IdDocumentoProveedor,
-            Concepto = concepto,
-            NroCuota = 1,
-            Total = total,
-            Saldo = total,
-            Cancelado = false,
-            Fecha = fecha,
-            FechaVencimiento = fecha.AddDays(30),
-            FechaAnulacion = fecha,
-            FechaPago = fecha,
-            InteresAplicado = 0,
-            Estado = await _referencias.IdAsync(EstadosCobranza.CtaCteGenerado, ct),
-            Total2 = -total,
-            IdEmpresa = IdEmpresa,
-            IdSucursal = doc.IdSucursal,
-            IdUsuario = idUsuario,
-        };
-        _compras.Add(ctaCte);
-        await _compras.SaveChangesAsync(ct);
-
-        _compras.Add(new Db.EntidadesCtaCteMovimientos
-        {
-            IdEntidadCtaCte = ctaCte.IdEntidadCtaCte,
-            Concepto = concepto,
-            AfavorEntidad = 0,
-            EnContraEntidad = total,
-            Fecha = fecha,
-            IdElementoCobroPago = await _referencias.GetParametroEnteroAsync("ELEMENTO", "CTACTE", ct),
-            IdElemento = 1,
-            IdComprobanteTipo = fc,
-            IdComprobante = doc.IdDocumentoProveedor,
-        });
-    }
-
-    private void AgregarStockDetalle(
-        Db.DocumentosProveedor doc, int tipo, string concepto, int idItem, decimal total, decimal saldo, decimal saldo2,
-        int idDetalle, int idRelacion, int idRelacionTipo, int idRelacionDetalle) =>
-        _compras.Add(new Db.EntidadesCtaCteStockMovimientosDetalle
-        {
-            IdEntidad = doc.IdProveedor,
-            IdComprobante = doc.IdDocumentoProveedor,
-            IdComprobanteTipo = tipo,
-            Concepto = VentaRules.Truncar(concepto, 50),
-            IdItem = idItem,
-            Total = total,
-            Saldo = saldo,
-            Saldo2 = saldo2,
-            Fecha = doc.FechaEmision,
-            IdSucursal = doc.IdSucursal,
-            IdComprobanteDetalle = idDetalle,
-            IdComprobanteRelacion = idRelacion,
-            IdComprobanteRelacionTipo = idRelacionTipo,
-            IdComprobanteRelacionDetalle = idRelacionDetalle,
-        });
-
-    private async Task SumarStockAsync(
-        int idItem, int idSucursal, decimal cantidad, int idComprobante, int tipo, int idDetalle, int idUsuario,
-        string concepto, string descripcion, DateTime ahora, CancellationToken ct)
-    {
-        await _stock.SumarStockAsync(idItem, idSucursal, cantidad, ahora, ct);
-        _compras.Add(new Db.ItemsMovimientosDetalles
-        {
-            IdItem = idItem,
-            IdComprobante = idComprobante,
-            IdComprobanteTipo = tipo,
-            IdComprobanteDetalle = idDetalle,
-            FechaAlta = ahora,
-            IdUsuario = idUsuario,
-            IdSucursal = idSucursal,
-            Concepto = VentaRules.Truncar(concepto, 100),
-            Item = VentaRules.Truncar(descripcion, 500),
-            Total = cantidad,
-            Debe = cantidad,
-            Haber = 0,
-            Total2 = cantidad,
-            Automatico = true,
-        });
-    }
 }
 
 public interface IAnularFacturaCompraUseCase

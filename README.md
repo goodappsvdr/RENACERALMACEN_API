@@ -490,6 +490,21 @@ Se mantiene del ERP y conviene revisar con negocio: en el libro IVA compras los 
 no se registran** (solo IIBB 5, percepciones 7/8/9, nacionales 1, municipales 3, internos 4 y otros 18); el movimiento de cta. cte. va
 "en contra" del proveedor, igual que una venta.
 
+### Notas de crédito de proveedor — NCP (`/api/DocumentoProveedor`)
+
+Port de `FrmNotaCreditoProveedor`. **Sin uso en producción**. Es la factura de compra con los signos invertidos y comparte su código
+(`UseCases/Compras/CompraEscritura.cs`): `GET nota-credito/nueva`, `POST nota-credito`, `POST nota-credito/{id}/anular`.
+
+Alta: resta stock por cada línea (mercadería devuelta), números de serie que vuelven al proveedor (NO DISPONIBLE), otros tributos,
+libro IVA compras como nota de crédito (`AFIP/NC A|B|C`) si la sucursal es RI y **saldo a favor** en la cta. cte. del proveedor
+(saldo negativo, `Total2` positivo, movimiento a favor), que después se usa en una orden de pago. No se relaciona con remitos ni
+órdenes de compra (en el ERP esa parte está comentada) y la letra sale de `ComprobantesLetras` para el tipo NCP.
+
+Diferencias **intencionales** con el ERP:
+- **Anulación:** el ERP copiaba la de la factura y volvía a **restar** el stock (lo descontaba dos veces); acá se devuelve.
+- Anulación bloqueada si la nota ya se usó en una orden de pago (su saldo dejó de ser el total a favor).
+- Mismos arreglos que la factura: control de duplicados que funciona, borrados por la clave correcta, `Otros` por línea.
+
 ### Órdenes de pago — OP (`/api/ProveedorRecibo`)
 
 Port de `FrmOrdendePago`. **Sin uso en producción** al portarlo (0 órdenes de pago). Es el espejo del recibo de cobro y reusa sus
@@ -527,6 +542,6 @@ Diferencias **intencionales** con el ERP:
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: resto del circuito de compras (orden de compra, remito de compra, nota de crédito de proveedor, compra con pago),
+transaccionales: resto del circuito de compras (orden de compra, remito de compra, compra con pago),
 ajustes y movimientos de stock, depósitos/extracciones, conciliación
 bancaria.
