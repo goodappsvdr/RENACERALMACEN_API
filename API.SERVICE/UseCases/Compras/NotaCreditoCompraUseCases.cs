@@ -102,7 +102,7 @@ public sealed class CreateNotaCreditoCompraUseCase : ICreateNotaCreditoCompraUse
             await _comprobantes.BloquearEntidadAsync(idProveedor, ct);
 
             var ncp = await _referencias.GetParametroEnteroAsync("COMPROBANTE", "NCP", ct);
-            var p = await escritura.PrepararAsync(dto, ncp, "nota de crédito", idUsuario, ct);
+            var p = await escritura.PrepararAsync(dto, dto.Letra, ncp, "nota de crédito", idUsuario, ct);
             var ahora = await _clock.GetNowAsync(ct);
             var concepto = VentaRules.Concepto("NCP", p.Letra, p.PuntoVenta, p.Numero);
             var doc = await escritura.GrabarCabeceraAsync(dto, p, ncp, idUsuario, ct);

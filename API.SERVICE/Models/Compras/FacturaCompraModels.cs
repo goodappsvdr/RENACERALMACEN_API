@@ -10,6 +10,8 @@ namespace API.SERVICE.Models.Compras;
 /// </summary>
 public sealed class CreateFacturaCompraDto : ComprobanteCompraDtoBase
 {
+    [Required, MaxLength(1)] public string Letra { get; set; } = string.Empty;
+
     /// <summary>Remitos de compra / órdenes de compra que se facturan.</summary>
     public List<ComprobanteRelacionadoDto> Comprobantes { get; set; } = [];
 }
@@ -18,16 +20,33 @@ public sealed class CreateFacturaCompraDto : ComprobanteCompraDtoBase
 /// Nota de crédito de proveedor (NCP) — FrmNotaCreditoProveedor. Mercadería devuelta o descuento del proveedor: resta stock, deja saldo
 /// a favor en la cta. cte. del proveedor (se usa en una orden de pago) y va al libro IVA compras como nota de crédito.
 /// </summary>
-public sealed class CreateNotaCreditoCompraDto : ComprobanteCompraDtoBase;
+public sealed class CreateNotaCreditoCompraDto : ComprobanteCompraDtoBase
+{
+    [Required, MaxLength(1)] public string Letra { get; set; } = string.Empty;
+}
 
-/// <summary>Datos comunes a los comprobantes que emite el proveedor (factura y nota de crédito).</summary>
+/// <summary>
+/// Remito de compra (RC) — FrmRemitosCompra. Mercadería que entrega el proveedor: suma stock (salvo lo que ya ingresó con la factura)
+/// y queda pendiente de facturar. Letra R, como el ERP.
+/// </summary>
+public sealed class CreateRemitoCompraDto : ComprobanteCompraDtoBase
+{
+    /// <summary>Facturas de compra / órdenes de compra que se entregan con este remito.</summary>
+    public List<ComprobanteRelacionadoDto> Comprobantes { get; set; } = [];
+
+    /// <summary>CAI / código de autorización impreso en el remito del proveedor.</summary>
+    [MaxLength(50)] public string? Cae { get; set; }
+
+    /// <summary>Vencimiento del CAI.</summary>
+    public DateTime? FechaVencimiento { get; set; }
+}
+
+/// <summary>Datos comunes a los comprobantes que emite el proveedor (factura, nota de crédito y remito).</summary>
 public abstract class ComprobanteCompraDtoBase
 {
     [Required] public int? IdProveedor { get; set; }
 
     [Required] public int? IdSucursal { get; set; }
-
-    [Required, MaxLength(1)] public string Letra { get; set; } = string.Empty;
 
     [Required, RegularExpression(@"^\d{1,5}$", ErrorMessage = "Punto de venta: hasta 5 dígitos.")]
     public string PuntoVenta { get; set; } = string.Empty;

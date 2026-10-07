@@ -35,18 +35,20 @@ internal sealed class CompraEscritura
     }
 
     /// <summary>Proveedor, sucursal, letra válida, número no registrado y planilla abierta del usuario.</summary>
-    public async Task<ComprobanteCompraPreparado> PrepararAsync(ComprobanteCompraDtoBase dto, int tipo, string nombre, int idUsuario, CancellationToken ct)
+    /// <param name="validarLetra">False para el remito de compra: siempre R y sin filas en ComprobantesLetras.</param>
+    public async Task<ComprobanteCompraPreparado> PrepararAsync(
+        ComprobanteCompraDtoBase dto, string letraPedida, int tipo, string nombre, int idUsuario, CancellationToken ct, bool validarLetra = true)
     {
         var idProveedor = dto.IdProveedor!.Value;
         var proveedor = await _comprobantes.GetEntidadAsync(idProveedor, ct) ?? throw new NotFoundException($"Proveedor {idProveedor} no existe.");
         var sucursal = await _stock.GetSucursalAsync(dto.IdSucursal!.Value, ct) ?? throw new NotFoundException($"Sucursal {dto.IdSucursal} no existe.");
         var idCategoriaIva = dto.IdCategoriaIva ?? proveedor.IdCategoriaIva ?? 1;
-        var letra = dto.Letra.ToUpperInvariant();
+        var letra = letraPedida.ToUpperInvariant();
         var puntoVenta = dto.PuntoVenta.PadLeft(4, '0');
         var numero = dto.Numero.PadLeft(8, '0');
 
-        var letras = await _compras.GetLetrasAsync(tipo, sucursal.IdCategoriaIva ?? 0, idCategoriaIva, ct);
-        if (!letras.Contains(letra))
+        var letras = validarLetra ? await _compras.GetLetrasAsync(tipo, sucursal.IdCategoriaIva ?? 0, idCategoriaIva, ct) : [];
+        if (validarLetra && !letras.Contains(letra))
             throw new BusinessException($"La letra {letra} no corresponde a esta sucursal y un proveedor de esa categoría de IVA (válidas: {string.Join(", ", letras)}).");
 
         var anulado = await CompraContexto.EstadoAsync(_referencias, "ANULADO", ct);
@@ -61,7 +63,8 @@ internal sealed class CompraEscritura
     }
 
     /// <summary>Cabecera (DocumentosProveedor_Agregar) y observación.</summary>
-    public async Task<Db.DocumentosProveedor> GrabarCabeceraAsync(ComprobanteCompraDtoBase dto, ComprobanteCompraPreparado p, int tipo, int idUsuario, CancellationToken ct)
+    public async Task<Db.DocumentosProveedor> GrabarCabeceraAsync(
+        ComprobanteCompraDtoBase dto, ComprobanteCompraPreparado p, int tipo, int idUsuario, CancellationToken ct, string? cae = null, DateTime? vtoCae = null)
     {
         var fecha = dto.FechaEmision!.Value;
         var doc = new Db.DocumentosProveedor
@@ -89,8 +92,8 @@ internal sealed class CompraEscritura
             IdEmpresa = IdEmpresa,
             IdPlanillaCaja = p.IdPlanillaCaja,
             Estado = await CompraContexto.EstadoAsync(_referencias, "GENERADO", ct),
-            Cae = "0",
-            VtoCae = fecha.Date,
+            Cae = cae ?? "0",
+            VtoCae = vtoCae ?? fecha.Date,
             IdTransporte = dto.IdTransporte,
             Transporte = dto.Transporte ?? string.Empty,
             IdUnidad = dto.IdUnidad,

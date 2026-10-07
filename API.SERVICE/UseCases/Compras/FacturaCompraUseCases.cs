@@ -130,7 +130,7 @@ public sealed class CreateFacturaCompraUseCase : ICreateFacturaCompraUseCase
             await _comprobantes.BloquearEntidadAsync(idProveedor, ct);
 
             var t = await CompraContexto.TiposAsync(_referencias, ct);
-            var p = await escritura.PrepararAsync(dto, t.Fc, "factura", idUsuario, ct);
+            var p = await escritura.PrepararAsync(dto, dto.Letra, t.Fc, "factura", idUsuario, ct);
             var origenes = await ValidarOrigenesAsync(dto, idProveedor, t, await CompraContexto.EstadoAsync(_referencias, "ANULADO", ct), ct);
 
             var ahora = await _clock.GetNowAsync(ct);
@@ -311,6 +311,10 @@ public sealed class AnularFacturaCompraUseCase : IAnularFacturaCompraUseCase
             var anulables = new[] { await CompraContexto.EstadoAsync(_referencias, "GENERADO", ct), await CompraContexto.EstadoAsync(_referencias, "LIQUIDADO", ct) };
             if (!anulables.Contains(doc.Estado ?? 0))
                 throw new ConflictException($"La factura de compra {idFactura} no se puede anular en su estado actual.");
+
+            // Un remito de compra la entregó: anularla dejaría al remito apuntando a líneas sin saldo.
+            if (await _compras.TieneRelacionesComoOrigenAsync(idFactura, ct))
+                throw new ConflictException($"La factura de compra {idFactura} tiene mercadería remitida: anule primero el remito de compra.");
 
             var ctaCte = await _compras.GetCtaCteAsync(t.Fc, idFactura, ct);
             if (ctaCte is not null && ctaCte.Saldo != ctaCte.Total)

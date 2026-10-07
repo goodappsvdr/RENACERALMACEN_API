@@ -91,6 +91,43 @@ public sealed partial class DocumentoProveedorController
         return NoContent();
     }
 
+    /// <summary>Facturas y órdenes de compra del proveedor con mercadería pendiente de recibir.</summary>
+    [HttpGet("pendientes-remitir")]
+    [ProducesResponseType(typeof(IReadOnlyList<ComprobanteCompraPendienteDisplay>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ComprobanteCompraPendienteDisplay>>> PendientesRemitir(
+        [FromQuery] int idProveedor, [FromServices] IGetComprobantesCompraParaRemitirUseCase useCase, CancellationToken cancellationToken) =>
+        Ok(await useCase.ExecuteAsync(idProveedor, cancellationToken));
+
+    /// <summary>
+    /// Alta de remito de compra (letra R): suma stock salvo lo que ya ingresó con la factura, saldo de facturas / órdenes entregadas
+    /// y queda pendiente de facturar. 409 si ya está registrado.
+    /// </summary>
+    [HttpPost("remito")]
+    [ProducesResponseType(typeof(DocumentoProveedorDisplay), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<DocumentoProveedorDisplay>> CreateRemito(
+        [FromBody] CreateRemitoCompraDto dto, [FromServices] ICreateRemitoCompraUseCase useCase, CancellationToken cancellationToken)
+    {
+        var remito = await useCase.ExecuteAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = remito.IdDocumentoProveedor }, remito);
+    }
+
+    /// <summary>Anulación de remito de compra. 409 si no está GENERADO o ya fue facturado.</summary>
+    [HttpPost("remito/{id:int}/anular")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AnularRemito(int id, [FromServices] IAnularRemitoCompraUseCase useCase, CancellationToken cancellationToken)
+    {
+        await useCase.ExecuteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Anulación de factura de compra. 409 si no está GENERADA / LIQUIDADA o ya tiene pagos imputados.</summary>
     [HttpPost("factura/{id:int}/anular")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

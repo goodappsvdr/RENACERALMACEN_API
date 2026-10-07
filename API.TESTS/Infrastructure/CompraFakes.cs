@@ -55,6 +55,14 @@ public sealed class FakeCompraRepository : ICompraRepository
     public Task SetEstadoPendienteAsync(int idDocumentoProveedor, int estado, bool pendiente, CancellationToken cancellationToken = default) =>
         Op($"EstadoPendiente {idDocumentoProveedor}={estado} pendiente={pendiente}");
 
+    public HashSet<int> ConRelacionesComoOrigen { get; } = [];
+
+    public Task SetPendienteAsync(int idDocumentoProveedor, bool pendiente, CancellationToken cancellationToken = default) =>
+        Op($"Pendiente {idDocumentoProveedor}={pendiente}");
+
+    public Task<bool> TieneRelacionesComoOrigenAsync(int idDocumentoProveedor, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ConRelacionesComoOrigen.Contains(idDocumentoProveedor));
+
     public Task DeterminarRemitarFacturarAsync(int idDocumentoProveedor, bool remitar, bool facturar, bool pendiente, CancellationToken cancellationToken = default) =>
         Op($"Determinar {idDocumentoProveedor} remitar={remitar} facturar={facturar} pendiente={pendiente}");
 

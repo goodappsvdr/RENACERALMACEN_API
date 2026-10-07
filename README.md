@@ -505,6 +505,27 @@ Diferencias **intencionales** con el ERP:
 - Anulación bloqueada si la nota ya se usó en una orden de pago (su saldo dejó de ser el total a favor).
 - Mismos arreglos que la factura: control de duplicados que funciona, borrados por la clave correcta, `Otros` por línea.
 
+### Remitos de compra — RC (`/api/DocumentoProveedor`)
+
+Port de `FrmRemitosCompra`. **Sin uso en producción**. Espejo del remito de venta, con el mismo código compartido de compras:
+`GET pendientes-remitir?idProveedor=` (facturas y órdenes de compra con mercadería pendiente de recibir), `POST remito`,
+`POST remito/{id}/anular`. Letra siempre R (el tipo RC no tiene filas en `ComprobantesLetras`); punto de venta, número y CAI son
+los del remito del proveedor.
+
+Por línea, como el ERP: **directa** → suma stock y queda pendiente de facturar; **de una orden de compra** → consume su saldo,
+suma stock y queda para facturar (la orden pasa a ENTREGADO / ENTREGADO PARCIAL); **de una factura de compra** → solo consume su
+saldo (el stock lo sumó la factura). No mueve cta. cte. ni libro IVA. Anulación: resta el stock sumado, devuelve saldos, anula
+movimientos, números de serie y el comprobante.
+
+Diferencias **intencionales** con el ERP:
+- **No pisa el estado de la factura de origen.** `DocumentosProveedor.Estado` de una factura refleja el pago (PAGADO / PAGADO
+  PARCIAL, que usa la orden de pago); el ERP le ponía ENTREGADO / ENTREGADO PARCIAL al remitirla y GENERADO al anular el remito.
+  Acá solo se actualiza su `Pendiente`; a las órdenes de compra sí se les cambia el estado como en el ERP.
+- Un remito facturado no se anula (409), y una **factura de compra con mercadería remitida tampoco** (antes había que anular el remito).
+- Validaciones nuevas (bajo el lock del proveedor): comprobantes del proveedor, no anulados, del mismo ítem y sin superar su saldo.
+- Al anular, también resta el stock de las líneas directas de un remito con relaciones (el ERP solo restaba las de orden de compra).
+- `ComprobantesCarga` guarda el remito (el ERP guardaba el ID de usuario en `ID_Comprobante`).
+
 ### Órdenes de pago — OP (`/api/ProveedorRecibo`)
 
 Port de `FrmOrdendePago`. **Sin uso en producción** al portarlo (0 órdenes de pago). Es el espejo del recibo de cobro y reusa sus
@@ -542,6 +563,6 @@ Diferencias **intencionales** con el ERP:
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: resto del circuito de compras (orden de compra, remito de compra, compra con pago),
+transaccionales: resto del circuito de compras (orden de compra, compra con pago),
 ajustes y movimientos de stock, depósitos/extracciones, conciliación
 bancaria.

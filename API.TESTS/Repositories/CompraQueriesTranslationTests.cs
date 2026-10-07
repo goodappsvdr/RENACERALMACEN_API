@@ -37,8 +37,10 @@ public class CompraQueriesTranslationTests
         await _repo.GetLineasPendientesAsync(400, [4, 12, 6, 22]);
         await _repo.GetRelacionesComoDestinoAsync(450);
         await _repo.GetCtaCteAsync(4, 450);
+        await _repo.TieneRelacionesComoOrigenAsync(450);
 
-        _interceptor.Commands.Should().HaveCount(9);
+        _interceptor.Commands.Should().HaveCount(10);
+        LastSql.Should().Contain("FROM [DocumentosProveedorRemitos]").And.Contain("[ID_DocumentoProveedor] = @");
         _interceptor.Commands.ElementAt(2).Should().Contain("[PuntoVenta] = @").And.Contain("[Numero] = @").And.Contain("<> @");
         _interceptor.Commands.ElementAt(3).Should().Contain("[ID_CategoriaIVAProveedor] = @").And.Contain("[ID_CategoriaIVACliente] = @");
         _interceptor.Commands.ElementAt(5).Should().Contain("EXISTS").And.Contain("[EntidadesCtaCteStockMovimientosDetalle]").And.Contain("[ID_Sucursal] = @");
@@ -55,11 +57,13 @@ public class CompraQueriesTranslationTests
         await _repo.AnularDocumentoAsync(450, 70, Ahora);
         await _repo.BorrarLibroIvaAsync(450, 4);
         await _repo.BorrarOtrosTributosAsync(450, 4);
+        await _repo.SetPendienteAsync(450, true);
 
-        _interceptor.Commands.Should().HaveCount(7);
+        _interceptor.Commands.Should().HaveCount(8);
         _interceptor.Commands.ElementAt(0).Should().StartWith("DELETE").And.Contain("[ID_DocumentoProveedorRemito] = @", "el SP del ERP borraba por otra columna");
         _interceptor.Commands.ElementAt(5).Should().StartWith("DELETE").And.Contain("[TxtComprasAlicuotas]").And.Contain("[ID_ComprobanteTipo] = @",
             "el SP del ERP comparaba la columna consigo misma");
-        LastSql.Should().StartWith("DELETE").And.Contain("[DocumentosProveedorOtrosTributos]");
+        _interceptor.Commands.ElementAt(6).Should().StartWith("DELETE").And.Contain("[DocumentosProveedorOtrosTributos]");
+        LastSql.Should().StartWith("UPDATE").And.Contain("[Pendiente] = @").And.NotContain("[Estado]");
     }
 }

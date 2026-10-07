@@ -79,6 +79,13 @@ public sealed class CompraRepository : ICompraRepository
         _context.DocumentosProveedor.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor)
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.Estado, estado).SetProperty(d => d.Pendiente, pendiente), cancellationToken);
 
+    public Task SetPendienteAsync(int idDocumentoProveedor, bool pendiente, CancellationToken cancellationToken = default) =>
+        _context.DocumentosProveedor.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.Pendiente, pendiente), cancellationToken);
+
+    public Task<bool> TieneRelacionesComoOrigenAsync(int idDocumentoProveedor, CancellationToken cancellationToken = default) =>
+        _context.DocumentosProveedorRemitos.AnyAsync(r => r.IdDocumentoProveedor == idDocumentoProveedor, cancellationToken);
+
     public Task DeterminarRemitarFacturarAsync(int idDocumentoProveedor, bool remitar, bool facturar, bool pendiente, CancellationToken cancellationToken = default) =>
         _context.DocumentosProveedor.Where(d => d.IdDocumentoProveedor == idDocumentoProveedor)
             .ExecuteUpdateAsync(s => s

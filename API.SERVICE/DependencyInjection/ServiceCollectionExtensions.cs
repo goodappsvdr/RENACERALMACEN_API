@@ -81,6 +81,9 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IIniciarNotaCreditoCompraUseCase, IniciarNotaCreditoCompraUseCase>();
         services.AddScoped<ICreateNotaCreditoCompraUseCase, CreateNotaCreditoCompraUseCase>();
         services.AddScoped<IAnularNotaCreditoCompraUseCase, AnularNotaCreditoCompraUseCase>();
+        services.AddScoped<ICreateRemitoCompraUseCase, CreateRemitoCompraUseCase>();
+        services.AddScoped<IAnularRemitoCompraUseCase, AnularRemitoCompraUseCase>();
+        services.AddScoped<IGetComprobantesCompraParaRemitirUseCase, GetComprobantesCompraParaRemitirUseCase>();
         services.AddScoped<IGetComprobantesCompraParaFacturarUseCase, GetComprobantesCompraParaFacturarUseCase>();
         services.AddScoped<IGetLineasPendientesCompraUseCase, GetLineasPendientesCompraUseCase>();
         services.AddScoped<IUsuarioAdminRepository, UsuarioAdminRepository>();

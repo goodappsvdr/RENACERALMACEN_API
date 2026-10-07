@@ -38,6 +38,12 @@ public interface ICompraRepository
     /// <summary>DocumentosProveedor_ModificarEstado_Pendiente.</summary>
     Task SetEstadoPendienteAsync(int idDocumentoProveedor, int estado, bool pendiente, CancellationToken cancellationToken = default);
 
+    /// <summary>Solo el flag Pendiente (sin tocar el estado, que en una factura refleja el pago).</summary>
+    Task SetPendienteAsync(int idDocumentoProveedor, bool pendiente, CancellationToken cancellationToken = default);
+
+    /// <summary>Si el comprobante figura como origen de otro (un remito o una factura que lo entregó o facturó).</summary>
+    Task<bool> TieneRelacionesComoOrigenAsync(int idDocumentoProveedor, CancellationToken cancellationToken = default);
+
     /// <summary>DocumentosProveedor_Determinar_Remitar_Facturar.</summary>
     Task DeterminarRemitarFacturarAsync(int idDocumentoProveedor, bool remitar, bool facturar, bool pendiente, CancellationToken cancellationToken = default);
 
