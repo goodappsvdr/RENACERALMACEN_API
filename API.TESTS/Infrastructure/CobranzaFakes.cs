@@ -27,6 +27,7 @@ public sealed class FakeReferencias : IReferenciasRepository
     public const int Efectivo = 1, Cheque = 2, Deposito = 3, Tarjeta = 8, Retencion = 5;
     public const int ChequeAutomatico = 900;
     public const int Pv = 1, Rv = 2, ElementoCtaCte = 9;
+    public const int Rc = 30, Oc = 31;
 
     private readonly Dictionary<string, int> _estados = new(StringComparer.OrdinalIgnoreCase);
 
@@ -48,6 +49,8 @@ public sealed class FakeReferencias : IReferenciasRepository
         [("NUMERACION", "RV")] = "0",
         [("COMPROBANTE", "PV")] = Pv.ToString(),
         [("COMPROBANTE", "RV")] = Rv.ToString(),
+        [("COMPROBANTE", "RC")] = Rc.ToString(),
+        [("COMPROBANTE", "OC")] = Oc.ToString(),
         [("ELEMENTO", "CTACTE")] = ElementoCtaCte.ToString(),
         // Factura electrónica
         [("AFIP", "FACTURA A")] = "1",

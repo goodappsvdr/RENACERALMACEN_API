@@ -452,9 +452,47 @@ Diferencias **intencionales** con el ERP (seguridad):
 Se mantiene: SHA1 como hash (lo exige la compatibilidad con el WebForms; migrar a un hash moderno requiere que el WebForms deje de
 validar contraseñas), email no único (`requiresUniqueEmail = false`), un solo rol por usuario. ABM de roles (`FrmRolesABM`): `GET/POST gestion/roles`, `PUT gestion/roles/{idRol}`; nombre en mayúsculas y único, y los roles que el código usa para permisos (ADMINISTRADOR, CEO, CTO) no se pueden renombrar (el ERP lo permitía y dejaba sin permisos a sus usuarios).
 
+### Facturas de compra — FC (`/api/DocumentoProveedor`)
+
+Port de `FrmFacturasCompras`. **Sin uso en producción** al portarlo (0 comprobantes de proveedor). El circuito de compras replica
+al de ventas: orden de compra (OC) ≈ presupuesto, remito de compra (RC) ≈ remito, factura (FC), nota de crédito (NCP) y compra
+con pago (COM + OP). Se portó primero la factura, que es la que carga la deuda con el proveedor.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET factura/nueva?idProveedor=&idSucursal=` | Planilla abierta del usuario y letras posibles (`ComprobantesLetras`: proveedor RI → A, monotributo → C, resto → B). |
+| `GET pendientes-facturar?idProveedor=` | Remitos de compra y órdenes de compra del proveedor con líneas pendientes (sin rol CEO/CTO, solo de la sucursal del usuario). |
+| `GET {id}/lineas-pendientes` | Líneas con saldo y su `relacion`. |
+| `POST factura` | Alta (ver abajo). 409 si la factura del proveedor ya está registrada. |
+| `POST factura/{id}/anular` | Anulación. 409 si no está GENERADA/LIQUIDADA o tiene pagos imputados. |
+
+Alta, como el ERP: punto de venta y número son los del proveedor (se completan con ceros). Por línea: **directa** → suma stock;
+**de un remito de compra** → solo consume su saldo (el stock ingresó con el remito); **de una orden de compra** → consume su saldo
+y suma stock. Números de serie nuevos en `ItemsNroSeries`, otros tributos, relación y estado FACTURADO / FACTURADO PARCIAL de cada
+remito u orden, deuda en la cta. cte. del proveedor (saldo = total, `Total2` negativo) y, si la sucursal es RI, libro IVA compras +
+`TxtComprasAlicuotas` por alícuota. Anulación: resta el stock sumado, devuelve saldos, borra libro IVA y tributos, anula cta. cte.,
+números de serie y comprobante.
+
+Diferencias **intencionales** con el ERP:
+- **Control de duplicados que funciona:** el ERP comparaba el número completado a 4 dígitos contra el guardado a 8, así que nunca
+  detectaba una factura repetida. El concepto usa también el número a 8 dígitos (el ERP mezclaba 4 y 8).
+- Validaciones nuevas (bajo el lock del proveedor): letra válida para la sucursal y el proveedor, remitos / órdenes del proveedor y
+  no anulados, cada línea relacionada del mismo ítem y sin superar su saldo.
+- Anulación bloqueada si la factura tiene pagos (saldo de cta. cte. ≠ total); el ERP solo miraba el estado.
+- Anulación de facturas mixtas (líneas directas y de remito/orden): el ERP solo restaba el stock de las líneas de orden de compra;
+  acá resta también el de las directas.
+- `TxtComprasAlicuotas_Anular` comparaba `ID_ComprobanteTipo` consigo mismo (borraba filas de otros tipos con el mismo ID);
+  `DocumentosProveedorRemitos_Anular` borraba por `ID_DocumentoProveedor` recibiendo el ID de la relación. Acá se borra por la clave correcta.
+- Cada línea graba su propio `Otros` (el ERP grababa el de la cabecera); el IVA del exento no se suma.
+- "Pendientes de facturar" incluye órdenes de compra y remitos facturados parcialmente (el ERP solo listaba remitos en GENERADO).
+
+Se mantiene del ERP y conviene revisar con negocio: en el libro IVA compras los **impuestos provinciales (2) y la percepción de IVA (6)
+no se registran** (solo IIBB 5, percepciones 7/8/9, nacionales 1, municipales 3, internos 4 y otros 18); el movimiento de cta. cte. va
+"en contra" del proveedor, igual que una venta.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: órdenes de pago,
+transaccionales: resto del circuito de compras (orden de compra, remito de compra, nota de crédito de proveedor, compra con pago), órdenes de pago,
 compras y facturas de proveedor, ajustes y movimientos de stock, depósitos/extracciones, conciliación
 bancaria.
