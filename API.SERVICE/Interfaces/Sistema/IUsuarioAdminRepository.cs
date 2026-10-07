@@ -24,6 +24,12 @@ public interface IUsuarioAdminRepository
     /// <summary>Rol con seguimiento de cambios (para asignarlo).</summary>
     Task<Db.AspnetRoles?> GetRolAsync(Guid roleId, CancellationToken cancellationToken = default);
 
+    /// <summary>Si ya hay un rol con ese nombre (sin distinguir mayúsculas), sin contar <paramref name="excluir"/>.</summary>
+    Task<bool> ExisteRolAsync(string nombre, Guid? excluir, CancellationToken cancellationToken = default);
+
+    /// <summary>Aplicación de Membership del ERP ("/"): la de los roles existentes.</summary>
+    Task<Guid?> GetApplicationIdAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Sucursales_BuscarActivas.</summary>
     Task<List<Db.Sucursales>> GetSucursalesActivasAsync(CancellationToken cancellationToken = default);
 

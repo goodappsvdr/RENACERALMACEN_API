@@ -61,3 +61,9 @@ public sealed record RolDisplay(Guid IdRol, string Nombre);
 public sealed record SucursalOpcionDisplay(int IdSucursal, string? Descripcion, string? PuntoVenta);
 
 public sealed record UsuarioAdminOpcionesDisplay(IReadOnlyList<RolDisplay> Roles, IReadOnlyList<SucursalOpcionDisplay> Sucursales);
+
+/// <summary>Alta / renombre de rol (Roles_Agregar_Ws / Roles_Modificar_Ws). El nombre se guarda en mayúsculas.</summary>
+public sealed class RolDto
+{
+    [Required, MaxLength(256)] public string Nombre { get; set; } = string.Empty;
+}

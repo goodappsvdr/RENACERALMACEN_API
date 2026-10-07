@@ -356,3 +356,122 @@ public sealed class CambiarPasswordUseCase : ICambiarPasswordUseCase
         }, cancellationToken);
     }
 }
+
+public interface IGetRolesUseCase
+{
+    Task<IReadOnlyList<RolDisplay>> ExecuteAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>Roles de Membership (Roles_BuscarTodos de FrmRolesABM).</summary>
+public sealed class GetRolesUseCase : IGetRolesUseCase
+{
+    private readonly IUsuarioAdminRepository _usuarios;
+    private readonly ICurrentUser _currentUser;
+
+    public GetRolesUseCase(IUsuarioAdminRepository usuarios, ICurrentUser currentUser)
+    {
+        _usuarios = usuarios;
+        _currentUser = currentUser;
+    }
+
+    public async Task<IReadOnlyList<RolDisplay>> ExecuteAsync(CancellationToken cancellationToken = default)
+    {
+        UsuarioAdminContexto.RequireAdministrador(_currentUser);
+        return (await _usuarios.GetRolesAsync(cancellationToken)).Select(r => new RolDisplay(r.RoleId, r.RoleName)).ToList();
+    }
+}
+
+public interface ICreateRolUseCase
+{
+    Task<RolDisplay> ExecuteAsync(RolDto dto, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Alta de rol (Roles_Agregar_Ws → Roles.CreateRole): nombre en mayúsculas y único. 409 si ya existe.</summary>
+public sealed class CreateRolUseCase : ICreateRolUseCase
+{
+    private readonly IUsuarioAdminRepository _usuarios;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
+
+    public CreateRolUseCase(IUsuarioAdminRepository usuarios, IUnitOfWork unitOfWork, ICurrentUser currentUser)
+    {
+        _usuarios = usuarios;
+        _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
+    }
+
+    public async Task<RolDisplay> ExecuteAsync(RolDto dto, CancellationToken cancellationToken = default)
+    {
+        UsuarioAdminContexto.RequireAdministrador(_currentUser);
+        var nombre = RolesContexto.Normalizar(dto.Nombre);
+
+        return await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            if (await _usuarios.ExisteRolAsync(nombre, excluir: null, ct))
+                throw new ConflictException($"El rol {nombre} ya existe.");
+            var app = await _usuarios.GetApplicationIdAsync(ct)
+                ?? throw new ConflictException("No se encontró la aplicación de Membership del ERP.");
+
+            var rol = new Db.AspnetRoles { ApplicationId = app, RoleId = Guid.NewGuid(), RoleName = nombre, LoweredRoleName = nombre.ToLowerInvariant() };
+            _usuarios.Add(rol);
+            await _usuarios.SaveChangesAsync(ct);
+            return new RolDisplay(rol.RoleId, rol.RoleName);
+        }, cancellationToken);
+    }
+}
+
+public interface IRenombrarRolUseCase
+{
+    Task<RolDisplay> ExecuteAsync(Guid idRol, RolDto dto, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Renombre de rol (Roles_Modificar_Ws). Los roles que el sistema usa para permisos no se renombran (el ERP lo permitía y
+/// dejaba sin permisos a sus usuarios). El cambio se ve en el próximo login.
+/// </summary>
+public sealed class RenombrarRolUseCase : IRenombrarRolUseCase
+{
+    private readonly IUsuarioAdminRepository _usuarios;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
+
+    public RenombrarRolUseCase(IUsuarioAdminRepository usuarios, IUnitOfWork unitOfWork, ICurrentUser currentUser)
+    {
+        _usuarios = usuarios;
+        _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
+    }
+
+    public async Task<RolDisplay> ExecuteAsync(Guid idRol, RolDto dto, CancellationToken cancellationToken = default)
+    {
+        UsuarioAdminContexto.RequireAdministrador(_currentUser);
+        var nombre = RolesContexto.Normalizar(dto.Nombre);
+
+        return await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            var rol = await _usuarios.GetRolAsync(idRol, ct) ?? throw new NotFoundException($"El rol {idRol} no existe.");
+            if (RolesContexto.DelSistema.Contains(rol.RoleName) && rol.RoleName != nombre)
+                throw new ConflictException($"El rol {rol.RoleName} lo usa el sistema para los permisos: no se puede renombrar.");
+            if (await _usuarios.ExisteRolAsync(nombre, excluir: idRol, ct))
+                throw new ConflictException($"El rol {nombre} ya existe.");
+
+            rol.RoleName = nombre;
+            rol.LoweredRoleName = nombre.ToLowerInvariant();
+            rol.Description = nombre; // como el SP del ERP
+            await _usuarios.SaveChangesAsync(ct);
+            return new RolDisplay(rol.RoleId, rol.RoleName);
+        }, cancellationToken);
+    }
+}
+
+internal static class RolesContexto
+{
+    /// <summary>Roles con permisos en el código (usuarios, caja). CTO lo consulta el ERP aunque hoy no existe.</summary>
+    public static readonly HashSet<string> DelSistema = [UsuarioAdminContexto.RolAdministrador, "CEO", "CTO"];
+
+    public static string Normalizar(string nombre)
+    {
+        var limpio = string.Join(' ', nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+        return limpio.Length == 0 ? throw new BusinessException("El nombre del rol es obligatorio.") : limpio;
+    }
+}

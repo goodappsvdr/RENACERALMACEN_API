@@ -73,6 +73,9 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<ICreateUsuarioAdminUseCase, CreateUsuarioAdminUseCase>();
         services.AddScoped<IUpdateUsuarioAdminUseCase, UpdateUsuarioAdminUseCase>();
         services.AddScoped<ICambiarPasswordUseCase, CambiarPasswordUseCase>();
+        services.AddScoped<IGetRolesUseCase, GetRolesUseCase>();
+        services.AddScoped<ICreateRolUseCase, CreateRolUseCase>();
+        services.AddScoped<IRenombrarRolUseCase, RenombrarRolUseCase>();
         services.AddScoped<IGetPlanillasCajaUseCase, GetPlanillasCajaUseCase>();
         services.AddScoped<IGetPlanillaCajaResumenUseCase, GetPlanillaCajaResumenUseCase>();
         services.AddScoped<IIniciarPlanillaCajaUseCase, IniciarPlanillaCajaUseCase>();

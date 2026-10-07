@@ -32,8 +32,11 @@ public class UsuarioAdminQueriesTranslationTests
         await _repo.GetRolAsync(Guid.NewGuid());
         await _repo.GetSucursalesActivasAsync();
         await _repo.GetSucursalesDeUsuarioAsync(38);
+        await _repo.ExisteRolAsync("Cajera", Guid.NewGuid());
+        await _repo.GetApplicationIdAsync();
 
-        _interceptor.Commands.Should().HaveCount(8);
+        _interceptor.Commands.Should().HaveCount(10);
+        _interceptor.Commands.ElementAt(8).Should().Contain("[LoweredRoleName] = @").And.Contain("[RoleId] <> @");
         _interceptor.Commands.ElementAt(0).Should().Contain("[aspnet_UsersInRoles]").And.Contain("[RoleName]").And.NotContain("[Pass]");
         _interceptor.Commands.ElementAt(2).Should().Contain("[aspnet_Membership]").And.Contain("[aspnet_UsersInRoles]");
         _interceptor.Commands.ElementAt(3).Should().Contain("[LoweredUserName] = @");

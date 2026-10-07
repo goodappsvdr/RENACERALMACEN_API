@@ -47,6 +47,16 @@ public sealed class UsuarioAdminRepository : IUsuarioAdminRepository
     public Task<Db.AspnetRoles?> GetRolAsync(Guid roleId, CancellationToken cancellationToken = default) =>
         _context.AspnetRoles.FirstOrDefaultAsync(r => r.RoleId == roleId, cancellationToken);
 
+    public Task<bool> ExisteRolAsync(string nombre, Guid? excluir, CancellationToken cancellationToken = default)
+    {
+        var lowered = nombre.ToLowerInvariant();
+        return _context.AspnetRoles.AnyAsync(r => r.LoweredRoleName == lowered && (excluir == null || r.RoleId != excluir), cancellationToken);
+    }
+
+    public async Task<Guid?> GetApplicationIdAsync(CancellationToken cancellationToken = default) =>
+        await _context.AspnetRoles.AsNoTracking().Select(r => (Guid?)r.ApplicationId).FirstOrDefaultAsync(cancellationToken)
+        ?? await _context.AspnetUsers.AsNoTracking().Select(u => (Guid?)u.ApplicationId).FirstOrDefaultAsync(cancellationToken);
+
     public Task<List<Db.Sucursales>> GetSucursalesActivasAsync(CancellationToken cancellationToken = default) =>
         _context.Sucursales.AsNoTracking().Where(s => s.Estado == SucursalActiva).OrderBy(s => s.IdSucursal).ToListAsync(cancellationToken);
 

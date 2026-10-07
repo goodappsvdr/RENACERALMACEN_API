@@ -450,11 +450,11 @@ Diferencias **intencionales** con el ERP (seguridad):
 - Un administrador no puede darse de baja a sí mismo.
 
 Se mantiene: SHA1 como hash (lo exige la compatibilidad con el WebForms; migrar a un hash moderno requiere que el WebForms deje de
-validar contraseñas), email no único (`requiresUniqueEmail = false`), un solo rol por usuario. `FrmRolesABM` (ABM de roles) no se portó.
+validar contraseñas), email no único (`requiresUniqueEmail = false`), un solo rol por usuario. ABM de roles (`FrmRolesABM`): `GET/POST gestion/roles`, `PUT gestion/roles/{idRol}`; nombre en mayúsculas y único, y los roles que el código usa para permisos (ADMINISTRADOR, CEO, CTO) no se pueden renombrar (el ERP lo permitía y dejaba sin permisos a sus usuarios).
 
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
 transaccionales: órdenes de pago,
 compras y facturas de proveedor, ajustes y movimientos de stock, depósitos/extracciones, conciliación
-bancaria y ABM de roles.
+bancaria.

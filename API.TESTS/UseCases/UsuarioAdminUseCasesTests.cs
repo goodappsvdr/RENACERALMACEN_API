@@ -190,6 +190,60 @@ public class UsuarioAdminUseCasesTests
         await act.Should().ThrowAsync<BusinessException>().WithMessage("*no es correcta*");
     }
 
+    // ---------- Roles ----------
+
+    [Fact]
+    public async Task CreateRol_MayusculasEspaciosNormalizadosYMismaAplicacion()
+    {
+        var r = await new CreateRolUseCase(_repo, new InlineUnitOfWork(), _user.Object).ExecuteAsync(new RolDto { Nombre = "  deposito   central " });
+
+        var rol = _repo.Added.OfType<AspnetRoles>().Single();
+        rol.Should().Match<AspnetRoles>(x => x.RoleName == "DEPOSITO CENTRAL" && x.LoweredRoleName == "deposito central" && x.ApplicationId == App);
+        r.Nombre.Should().Be("DEPOSITO CENTRAL");
+    }
+
+    [Fact]
+    public async Task CreateRol_Existente_409()
+    {
+        var act = () => new CreateRolUseCase(_repo, new InlineUnitOfWork(), _user.Object).ExecuteAsync(new RolDto { Nombre = "Cajera" });
+
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("*ya existe*");
+    }
+
+    [Fact]
+    public async Task RenombrarRol_ActualizaNombreYDescripcion()
+    {
+        var r = await new RenombrarRolUseCase(_repo, new InlineUnitOfWork(), _user.Object).ExecuteAsync(RolCajera, new RolDto { Nombre = "caja" });
+
+        _repo.Roles.Single(x => x.RoleId == RolCajera).Should().Match<AspnetRoles>(x => x.RoleName == "CAJA" && x.LoweredRoleName == "caja" && x.Description == "CAJA");
+        r.Nombre.Should().Be("CAJA");
+    }
+
+    [Fact]
+    public async Task RenombrarRol_DelSistema_409()
+    {
+        var act = () => new RenombrarRolUseCase(_repo, new InlineUnitOfWork(), _user.Object).ExecuteAsync(RolAdmin, new RolDto { Nombre = "ADMIN" });
+
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("*permisos*");
+    }
+
+    [Fact]
+    public async Task RenombrarRol_ANombreDeOtro_409()
+    {
+        var act = () => new RenombrarRolUseCase(_repo, new InlineUnitOfWork(), _user.Object).ExecuteAsync(RolCajera, new RolDto { Nombre = "administrador" });
+
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("*ya existe*");
+    }
+
+    [Fact]
+    public async Task Roles_SinAdministrador_403()
+    {
+        _user.Setup(u => u.IsInRole("ADMINISTRADOR")).Returns(false);
+
+        await FluentActions.Invoking(() => new CreateRolUseCase(_repo, new InlineUnitOfWork(), _user.Object).ExecuteAsync(new RolDto { Nombre = "X" }))
+            .Should().ThrowAsync<ForbiddenException>();
+    }
+
     // ---------- helpers ----------
 
     private CreateUsuarioAdminUseCase CreateSut() => new(_repo, _ref, new InlineUnitOfWork(), _time, _user.Object);
@@ -270,6 +324,12 @@ public sealed class FakeUsuarioAdminRepository : IUsuarioAdminRepository
 
     public Task<AspnetRoles?> GetRolAsync(Guid roleId, CancellationToken cancellationToken = default) =>
         Task.FromResult(Roles.FirstOrDefault(r => r.RoleId == roleId));
+
+    public Task<bool> ExisteRolAsync(string nombre, Guid? excluir, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Roles.Concat(Added.OfType<AspnetRoles>()).Any(r => r.LoweredRoleName == nombre.ToLowerInvariant() && r.RoleId != excluir));
+
+    public Task<Guid?> GetApplicationIdAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(Roles.Select(r => (Guid?)r.ApplicationId).FirstOrDefault());
 
     public Task<List<Sucursales>> GetSucursalesActivasAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(Sucursales.Where(s => s.Estado == 161).ToList());
