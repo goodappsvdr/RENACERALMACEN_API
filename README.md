@@ -490,6 +490,40 @@ Se mantiene del ERP y conviene revisar con negocio: en el libro IVA compras los 
 no se registran** (solo IIBB 5, percepciones 7/8/9, nacionales 1, municipales 3, internos 4 y otros 18); el movimiento de cta. cte. va
 "en contra" del proveedor, igual que una venta.
 
+### Órdenes de pago — OP (`/api/ProveedorRecibo`)
+
+Port de `FrmOrdendePago`. **Sin uso en producción** al portarlo (0 órdenes de pago). Es el espejo del recibo de cobro y reusa sus
+piezas (cta. cte., caja, bancos, retenciones, numeración, lock por ente).
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET nueva` | Planilla abierta, punto de venta y número sugerido (letra X, `NUMERACION/OP`). |
+| `GET comprobantes-pendientes?idProveedor=` | Cta. cte. pendiente del proveedor; REC/FV/VEN/NC con el saldo invertido, como la pantalla. |
+| `POST` | Alta (ver abajo). |
+| `POST {id}/anular` | Anulación. 409 si no está GENERADA. |
+
+Imputación, en el orden en que llegan: **FC / COM / NCP** admiten pago parcial (PAGADO / PAGADO PARCIAL en `DocumentosProveedor`;
+una NCP, con saldo negativo, suma al disponible); **VEN / FV / NC** del mismo ente como cliente se compensan enteros (COBRADO);
+**REC** queda RELACIONADO y una **OP** anterior con saldo, RELACIONADA. Formas de pago: efectivo; **cheque de terceros** en cartera
+(pasa a ENTREGADO y se registra en `ProveedoresCheques`); **cheque propio** de una chequera (ENTREGADO + movimiento de salida en su
+cuenta); transferencia/depósito y tarjeta (movimiento de salida en la cuenta propia); retención. Todo sale de la caja (`Haber`).
+Lo pagado de más queda como saldo negativo en la cta. cte. de la OP. Anulación: cheques de terceros vuelven a cartera, cheques
+propios y los registrados al proveedor se anulan, se anulan caja / bancos / retenciones / detalle, se devuelve el saldo a cada
+comprobante con su estado y se anula la cta. cte. de la OP.
+
+Diferencias **intencionales** con el ERP:
+- **Pago sin plata:** con el importe de la OP ya consumido, el ERP igual cancelaba la factura siguiente y la marcaba PAGADA con $0
+  aplicado. Acá se rechaza (400).
+- **Estado al anular:** el SP que decide PAGADO PARCIAL vs GENERADO comparaba `ID_DocumentoProveedor = ID_DocumentoProveedor`, o sea
+  miraba todas las imputaciones de la base; acá mira las de ese comprobante.
+- Anular solo en GENERADA (el ERP anulaba incluso una OP RELACIONADA, ya usada en otro comprobante).
+- **Cheques:** se valida que el cheque de terceros siga en cartera y que el importe coincida, y que el cheque propio esté disponible;
+  la actualización es condicional al estado, así que dos OP simultáneas no entregan el mismo cheque (409). Al anular, los cheques
+  registrados en `ProveedoresCheques` quedan ANULADOS (el ERP los dejaba ENTREGADOS). `ProveedoresCheques.ID_Sucursal` guarda la
+  sucursal del banco del cheque (el ERP grababa la sucursal de la empresa).
+- Totales calculados en el servidor y cada comprobante validado contra su saldo pendiente (el ERP confiaba en el navegador).
+- `ID_Elemento` del detalle apunta al cheque propio entregado (el ERP dejaba 1).
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
