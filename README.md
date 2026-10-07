@@ -53,9 +53,40 @@ con el mismo algoritmo que el `SqlMembershipProvider` del WebForms (SHA1 con sal
 usuario aprobado/bloqueado y bloqueando tras 5 intentos fallidos en 10 minutos (igual que el `Web.config`).
 
 El token incluye `sub` (UserId de Membership), `unique_name`, `id_usuario`, `id_sucursal` y los roles.
-Todos los endpoints exigen token. En el ERP los chequeos de rol no restringen acceso (solo
-controlaban menús ya comentados), así que la API tampoco filtra por rol todavía; los roles ya viajan
-en el token para agregar policies cuando se definan.
+Todos los endpoints exigen token.
+
+### Permisos por rol
+
+En el ERP los roles casi no restringen nada (solo CEO / ADMINISTRADOR ven el menú de informes). La API agrupa los
+endpoints en **áreas** y la sección `Permisos` de `appsettings.json` dice qué roles **operan** (POST / PUT / DELETE) en
+cada una. Se recarga sin reiniciar: negocio puede ajustar roles editando el archivo.
+
+| Área | Controllers (carpeta) |
+|---|---|
+| Ventas | `Ventas` |
+| Cobranzas | `Clientes` (recibos, cheques de terceros), `CuentasCorrientes` |
+| Caja | `Caja` |
+| Compras | `Compras` |
+| Pagos | `Proveedores` (órdenes de pago) |
+| Bancos | `Bancos` (incluye depósitos y extracciones) |
+| Stock | `Stock` (incluye transferencias entre sucursales) |
+| Maestros | `Items`, `Entidades`, `Geografia`, `Transportes`, y `Retencion`, `OtroTributo`, `AreaDeContacto`, `Motivo` |
+| Informes | `Reportes`, `Afip` (libros IVA) — **también la consulta** está restringida (`LecturaRestringida`) |
+| Sistema | `Sistema`, `Empresas`, `Comprobantes`, `Miscelaneas` |
+
+- `RolesTotales` (CEO, ADMINISTRADOR) pueden todo. Las consultas (GET) son libres para cualquier usuario logueado,
+  salvo en Informes; así el front puede cargar combos (sucursales, estados, puntos de venta) con cualquier rol.
+- Sin permiso: **403** con el `ErrorCatchResponse` estándar. Un controller sin área asignada solo lo usan los roles totales;
+  un test exige que todos tengan área y que los roles de la configuración existan en `aspnet_Roles`.
+- `[LibreDeArea]` exime una acción (hoy solo `POST /api/Usuario/cambiar-password`, sobre el propio usuario). `Auth` no se controla.
+- Se suman a los controles propios de cada flujo: administrar usuarios y roles sigue siendo solo de ADMINISTRADOR, la caja y las
+  transferencias de stock exigen además operar la sucursal.
+
+Asignación inicial (a validar con negocio): Ventas → COMERCIAL, RESP. EQUIPO COMERCIAL, GESTION DE CLIENTES; Cobranzas → esos +
+CAJERA, RECAUDACION, TESORERIA Y FINANZAS; Caja → CAJERA, RECAUDACION, TESORERIA Y FINANZAS; Compras → GESTION DE PROVEEDORES,
+RESP. DE PLANTA; Pagos → GESTION DE PROVEEDORES, TESORERIA Y FINANZAS; Bancos → TESORERIA Y FINANZAS; Stock → LOGISTICA,
+RESP. DE PLANTA, RESP. DE PRODUCCION; Maestros → COMERCIAL, GESTION DE CLIENTES, GESTION DE PROVEEDORES; Informes → DIRECTOR;
+Sistema → solo roles totales. CONSULTOR queda de solo lectura. Hoy solo operan un CEO y un ADMINISTRADOR, que tienen todo.
 
 ## Endpoints
 

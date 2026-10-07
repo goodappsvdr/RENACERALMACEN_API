@@ -40,7 +40,8 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 
-builder.Services.AddControllers();
+builder.Services.Configure<PermisosOptions>(builder.Configuration.GetSection(PermisosOptions.SectionName));
+builder.Services.AddControllers(options => options.Filters.Add<PermisoPorAreaFilter>());
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>

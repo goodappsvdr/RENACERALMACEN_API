@@ -1,3 +1,4 @@
+using API.Security;
 using API.SERVICE.Models.Common;
 using API.SERVICE.Models.Sistema;
 using API.SERVICE.UseCases.Sistema;
@@ -91,6 +92,7 @@ public sealed partial class UsuarioController
 
     /// <summary>Cambio de la contraseña del usuario logueado. 400 si la actual no es correcta.</summary>
     [HttpPost("cambiar-password")]
+    [LibreDeArea]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]

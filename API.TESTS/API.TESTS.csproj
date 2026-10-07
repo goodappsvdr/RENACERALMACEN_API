@@ -27,6 +27,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\API.SERVICE\API.SERVICE.csproj" />
+    <ProjectReference Include="..\API\API.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>
