@@ -35,8 +35,9 @@ public class UsuarioAdminQueriesTranslationTests
         await _repo.ExisteRolAsync("Cajera", Guid.NewGuid());
         await _repo.GetApplicationIdAsync();
 
-        _interceptor.Commands.Should().HaveCount(10);
+        _interceptor.Commands.Should().HaveCount(11, "sin roles, la aplicación se busca en aspnet_Users");
         _interceptor.Commands.ElementAt(8).Should().Contain("[LoweredRoleName] = @").And.Contain("[RoleId] <> @");
+        _interceptor.Commands.ElementAt(10).Should().Contain("FROM [aspnet_Users]");
         _interceptor.Commands.ElementAt(0).Should().Contain("[aspnet_UsersInRoles]").And.Contain("[RoleName]").And.NotContain("[Pass]");
         _interceptor.Commands.ElementAt(2).Should().Contain("[aspnet_Membership]").And.Contain("[aspnet_UsersInRoles]");
         _interceptor.Commands.ElementAt(3).Should().Contain("[LoweredUserName] = @");
