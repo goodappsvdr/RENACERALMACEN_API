@@ -493,6 +493,6 @@ no se registran** (solo IIBB 5, percepciones 7/8/9, nacionales 1, municipales 3,
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: resto del circuito de compras (orden de compra, remito de compra, nota de crédito de proveedor, compra con pago), órdenes de pago,
+transaccionales: resto del circuito de compras (orden de compra, remito de compra, nota de crédito de proveedor, compra con pago),
 ajustes y movimientos de stock, depósitos/extracciones, conciliación
 bancaria.

@@ -70,6 +70,11 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IReciboCobroRepository, ReciboCobroRepository>();
         services.AddScoped<IPlanillaCajaRepository, PlanillaCajaRepository>();
         services.AddScoped<ICompraRepository, CompraRepository>();
+        services.AddScoped<IOrdenPagoRepository, OrdenPagoRepository>();
+        services.AddScoped<IIniciarOrdenPagoUseCase, IniciarOrdenPagoUseCase>();
+        services.AddScoped<IGetComprobantesPendientesPagoUseCase, GetComprobantesPendientesPagoUseCase>();
+        services.AddScoped<ICreateOrdenPagoUseCase, CreateOrdenPagoUseCase>();
+        services.AddScoped<IAnularOrdenPagoUseCase, AnularOrdenPagoUseCase>();
         services.AddScoped<IIniciarFacturaCompraUseCase, IniciarFacturaCompraUseCase>();
         services.AddScoped<ICreateFacturaCompraUseCase, CreateFacturaCompraUseCase>();
         services.AddScoped<IAnularFacturaCompraUseCase, AnularFacturaCompraUseCase>();
