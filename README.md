@@ -590,9 +590,31 @@ Diferencias **intencionales** con el ERP:
 - Totales calculados en el servidor y cada comprobante validado contra su saldo pendiente (el ERP confiaba en el navegador).
 - `ID_Elemento` del detalle apunta al cheque propio entregado (el ERP dejaba 1).
 
+### Depósitos y extracciones bancarias — OD / OE (`/api/OrdenDeposito`, `/api/OrdenExtraccion`)
+
+Port de `FrmOrdendeDeposito` / `FrmOrdendeExtraccion` (`Agregar_Ws` + `Editar_Ws`). **Sin uso en producción** (0 órdenes).
+En cada controller: `GET nueva` (planilla abierta, punto de venta y número sugerido; letra X, `NUMERACION/OD` y `NUMERACION/OE`),
+`POST` y `POST {id}/anular` (409 si ya está anulada). La cuenta destino/origen tiene que estar ACTIVA.
+
+- **Depósito:** orden GENERADA con un movimiento de ingreso (`Debe`) en la cuenta por cada elemento: efectivo y depósito
+  bancario/transferencia (tipo 1, con los datos de origen/destino informados), **cheque de terceros** en cartera (tipo 5, origen = banco
+  y número del cheque; el cheque pasa a DEPOSITADO) y tarjeta (tipo 1). Retenciones y demás elementos → 400. El detalle apunta al
+  movimiento generado (`ID_Elemento`).
+- **Extracción:** solo efectivo: movimiento de egreso (tipo 6, `Haber`, `Total` negativo) con origen = la cuenta propia.
+- **Anulación:** orden ANULADA (total 0), movimientos bancarios ANULADOS, cheques depositados vuelven a EN CARTERA, detalle anulado.
+
+Como el ERP, **no se toca la caja**: depositar efectivo no genera egreso de la planilla ni extraer genera ingreso (revisar con negocio
+si deberían). Diferencias **intencionales** con el ERP:
+- **Extracción:** el ERP copió la pantalla de depósito; con cheques / transferencias / tarjetas grababa ingresos en una extracción.
+  Acá solo se extrae efectivo.
+- **Tarjeta:** el ERP grababa `Debe` = importe con `Total` negativo; acá es un ingreso coherente.
+- **Cheques:** se valida que el cheque siga en cartera y que el importe coincida; la actualización es condicional al estado (409 si
+  otra operación lo usó). No se crea la fila en `ProveedoresCheques` que el ERP generaba para un depósito (no hay proveedor).
+- Anulación solo una vez (el ERP no controlaba el estado y repetía los efectos); `Total` de la orden calculado en el servidor.
+- Ojo con los parámetros: `COMPROBANTE/OE` = 21 es el mismo ID que FVC; la API respeta lo que diga la tabla de parámetros.
+
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: depósitos y extracciones bancarias (`FrmOrdendeDeposito` / `FrmOrdendeExtraccion`) y movimientos de stock
-entre sucursales (`FrmMovimientoStockABM` / `FrmMovimientoStockRecibir`). Sin portar a propósito por no tener uso: ajuste de stock y
+transaccionales: movimientos de stock entre sucursales (`FrmMovimientoStockABM` / `FrmMovimientoStockRecibir`). Sin portar a propósito por no tener uso: ajuste de stock y
 ajustes de caja. `FrmConciliacionBancaria` es una copia de la pantalla de facturas: no hay conciliación bancaria que portar.
