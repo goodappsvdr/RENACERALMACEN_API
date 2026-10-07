@@ -174,6 +174,44 @@ public sealed partial class DocumentoProveedorController
         return NoContent();
     }
 
+    /// <summary>Planilla de caja abierta, punto de venta y número sugerido para una compra con pago (letra X).</summary>
+    [HttpGet("compra/nueva")]
+    [ProducesResponseType(typeof(NuevaVentaInternaDisplay), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<NuevaVentaInternaDisplay>> NuevaCompra([FromServices] IIniciarCompraContadoUseCase useCase, CancellationToken cancellationToken) =>
+        Ok(await useCase.ExecuteAsync(cancellationToken));
+
+    /// <summary>
+    /// Compra con pago en el momento: suma stock, carga la deuda con el proveedor y, si vienen formas de pago, genera la orden de pago
+    /// que la cancela (en la misma transacción). 409 si un cheque ya no está disponible.
+    /// </summary>
+    [HttpPost("compra")]
+    [ProducesResponseType(typeof(CompraContadoResultado), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<CompraContadoResultado>> CreateCompra(
+        [FromBody] CreateCompraContadoDto dto, [FromServices] ICreateCompraContadoUseCase useCase, CancellationToken cancellationToken)
+    {
+        var resultado = await useCase.ExecuteAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = resultado.Compra.IdDocumentoProveedor }, resultado);
+    }
+
+    /// <summary>Anulación de compra con pago: resta el stock. 409 si no está GENERADA (si se pagó, primero se anula la orden de pago).</summary>
+    [HttpPost("compra/{id:int}/anular")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorCatchResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AnularCompra(int id, [FromServices] IAnularCompraContadoUseCase useCase, CancellationToken cancellationToken)
+    {
+        await useCase.ExecuteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Anulación de factura de compra. 409 si no está GENERADA / LIQUIDADA o ya tiene pagos imputados.</summary>
     [HttpPost("factura/{id:int}/anular")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

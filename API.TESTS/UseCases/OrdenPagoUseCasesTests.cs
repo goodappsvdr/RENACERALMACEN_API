@@ -243,7 +243,8 @@ public class OrdenPagoUseCasesTests
 
     // ---------- helpers ----------
 
-    private CreateOrdenPagoUseCase CreateSut() => new(_ordenes, _recibos, _ref, new InlineUnitOfWork(), new FixedServerClock(Ahora), _user.Object);
+    private CreateOrdenPagoUseCase CreateSut() =>
+        new(new OrdenPagoWriter(_ordenes, _recibos, _ref, new FixedServerClock(Ahora)), _recibos, new InlineUnitOfWork(), _user.Object);
 
     private AnularOrdenPagoUseCase AnularSut() => new(_ordenes, _recibos, _ref, new InlineUnitOfWork(), new FixedServerClock(Ahora), _user.Object);
 

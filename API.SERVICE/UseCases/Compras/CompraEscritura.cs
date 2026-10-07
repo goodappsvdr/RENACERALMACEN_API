@@ -288,7 +288,9 @@ internal sealed class CompraEscritura
     /// Cta. cte. del proveedor (EntidadesCtaCte_Agregar + movimiento). Factura: deuda (saldo = total, Total2 negativo, movimiento en contra).
     /// Nota de crédito: a favor (saldo negativo, Total2 positivo, movimiento a favor).
     /// </summary>
-    public async Task<Db.EntidadesCtaCte> RegistrarCtaCteAsync(Db.DocumentosProveedor doc, int tipo, string concepto, int idUsuario, bool credito, CancellationToken ct)
+    /// <param name="movimientoAFavor">Fuerza el sentido del movimiento (la COM del ERP lo graba a favor aunque sea deuda).</param>
+    public async Task<Db.EntidadesCtaCte> RegistrarCtaCteAsync(
+        Db.DocumentosProveedor doc, int tipo, string concepto, int idUsuario, bool credito, CancellationToken ct, bool? movimientoAFavor = null)
     {
         var fecha = doc.FechaEmision!.Value;
         var total = doc.TotalGeneral ?? 0m;
@@ -320,8 +322,8 @@ internal sealed class CompraEscritura
         {
             IdEntidadCtaCte = ctaCte.IdEntidadCtaCte,
             Concepto = concepto,
-            AfavorEntidad = credito ? total : 0,
-            EnContraEntidad = credito ? 0 : total,
+            AfavorEntidad = (movimientoAFavor ?? credito) ? total : 0,
+            EnContraEntidad = (movimientoAFavor ?? credito) ? 0 : total,
             Fecha = fecha,
             IdElementoCobroPago = await _referencias.GetParametroEnteroAsync("ELEMENTO", "CTACTE", ct),
             IdElemento = 1,

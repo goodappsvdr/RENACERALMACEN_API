@@ -542,6 +542,20 @@ Diferencias **intencionales** con el ERP:
 - Al anular, también resta el stock de las líneas directas de un remito con relaciones (el ERP solo restaba las de orden de compra).
 - `ComprobantesCarga` guarda el remito (el ERP guardaba el ID de usuario en `ID_Comprobante`).
 
+### Compra con pago en el momento — COM (`/api/DocumentoProveedor`)
+
+Port de `FrmCompras` (`Agregar_Ws` + `generarOrdenDePago` + `Editar_Ws`). **Sin uso en producción**. `GET compra/nueva`, `POST compra`,
+`POST compra/{id}/anular`. Letra X y numeración propia (`NUMERACION/COM`). Suma stock por línea (sin dejar saldo para remitir ni facturar,
+como el ERP), actualiza el costo del ítem (`Items.Neto` = precio unitario sin IVA) si `CAMBIAPRECIO/CAMBIAPRECIO = 1`, carga la deuda
+en la cta. cte. del proveedor y, si se informan formas de pago, genera **en la misma transacción** la orden de pago que la imputa,
+con el mismo `IOrdenPagoWriter` que el alta de orden de pago (efectivo, cheques, transferencias, tarjetas, retenciones; pago parcial
+→ PAGADO PARCIAL). Respuesta: `{ compra, ordenPago }`. No va al libro IVA compras (como el ERP). Anulación solo en GENERADO y sin
+pagos: si se pagó, primero se anula la orden de pago (que la devuelve a GENERADO).
+
+Diferencias con el ERP: la COM se graba como deuda y la orden de pago la cancela con las mismas validaciones que una OP manual
+(el ERP la grababa cancelada y después volvía a imputarla, sin validar cheques ni importes); la anulación resta el stock de la sucursal
+de la compra (el ERP usaba una variable de sucursal sin cargar).
+
 ### Órdenes de pago — OP (`/api/ProveedorRecibo`)
 
 Port de `FrmOrdendePago`. **Sin uso en producción** al portarlo (0 órdenes de pago). Es el espejo del recibo de cobro y reusa sus
@@ -579,6 +593,6 @@ Diferencias **intencionales** con el ERP:
 ## Pendiente (próximos tickets)
 
 Flujos compuestos que hoy viven en los code-behind del WebForms y deben portarse como casos de uso
-transaccionales: compra con pago en el momento (COM + OP),
-ajustes y movimientos de stock, depósitos/extracciones, conciliación
-bancaria.
+transaccionales: depósitos y extracciones bancarias (`FrmOrdendeDeposito` / `FrmOrdendeExtraccion`) y movimientos de stock
+entre sucursales (`FrmMovimientoStockABM` / `FrmMovimientoStockRecibir`). Sin portar a propósito por no tener uso: ajuste de stock y
+ajustes de caja. `FrmConciliacionBancaria` es una copia de la pantalla de facturas: no hay conciliación bancaria que portar.

@@ -74,3 +74,21 @@ public sealed record NuevaOrdenPagoDisplay(int IdPlanillaCaja, string PuntoVenta
 
 /// <summary>Comprobante pendiente en la cta. cte. del proveedor, listo para imputar.</summary>
 public sealed record ComprobantePendientePagoDisplay(int IdComprobante, int IdComprobanteTipo, string? Comprobante, DateTime? Fecha, decimal Saldo);
+
+/// <summary>
+/// Compra con pago en el momento (COM) — FrmCompras. Suma stock y carga la deuda con el proveedor; si se informan formas de pago,
+/// genera en la misma transacción una orden de pago que la cancela (total o parcialmente). Letra X y numeración propia (NUMERACION/COM).
+/// </summary>
+public sealed class CreateCompraContadoDto : ComprobanteCompraDtoBase
+{
+    /// <summary>Solo con numeración manual (NUMERACION/COM = 1).</summary>
+    [MaxLength(50)] public string? PuntoVenta { get; set; }
+
+    /// <summary>Solo con numeración manual (NUMERACION/COM = 1).</summary>
+    [MaxLength(50)] public string? Numero { get; set; }
+
+    /// <summary>Formas de pago de la orden de pago. Vacío: la compra queda en cta. cte.</summary>
+    public List<ElementoPagoDto> Elementos { get; set; } = [];
+}
+
+public sealed record CompraContadoResultado(DocumentoProveedorDisplay Compra, API.SERVICE.Models.Proveedores.ProveedorReciboDisplay? OrdenPago);

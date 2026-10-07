@@ -73,6 +73,7 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<IOrdenPagoRepository, OrdenPagoRepository>();
         services.AddScoped<IIniciarOrdenPagoUseCase, IniciarOrdenPagoUseCase>();
         services.AddScoped<IGetComprobantesPendientesPagoUseCase, GetComprobantesPendientesPagoUseCase>();
+        services.AddScoped<IOrdenPagoWriter, OrdenPagoWriter>();
         services.AddScoped<ICreateOrdenPagoUseCase, CreateOrdenPagoUseCase>();
         services.AddScoped<IAnularOrdenPagoUseCase, AnularOrdenPagoUseCase>();
         services.AddScoped<IIniciarFacturaCompraUseCase, IniciarFacturaCompraUseCase>();
@@ -88,6 +89,9 @@ public static partial class ServiceCollectionExtensions
         services.AddScoped<ICreateOrdenCompraUseCase, CreateOrdenCompraUseCase>();
         services.AddScoped<IUpdateOrdenCompraUseCase, UpdateOrdenCompraUseCase>();
         services.AddScoped<IAnularOrdenCompraUseCase, AnularOrdenCompraUseCase>();
+        services.AddScoped<IIniciarCompraContadoUseCase, IniciarCompraContadoUseCase>();
+        services.AddScoped<ICreateCompraContadoUseCase, CreateCompraContadoUseCase>();
+        services.AddScoped<IAnularCompraContadoUseCase, AnularCompraContadoUseCase>();
         services.AddScoped<IGetComprobantesCompraParaFacturarUseCase, GetComprobantesCompraParaFacturarUseCase>();
         services.AddScoped<IGetLineasPendientesCompraUseCase, GetLineasPendientesCompraUseCase>();
         services.AddScoped<IUsuarioAdminRepository, UsuarioAdminRepository>();

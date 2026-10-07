@@ -82,17 +82,54 @@ public sealed class GetComprobantesPendientesPagoUseCase : IGetComprobantesPendi
     }
 }
 
+public interface IOrdenPagoWriter
+{
+    /// <summary>
+    /// Graba una orden de pago completa dentro de la transacción en curso (no abre una propia ni toma el lock del proveedor).
+    /// Lo usan el alta de orden de pago y la compra con pago en el momento.
+    /// </summary>
+    Task<Db.ProveedoresRecibos> GrabarAsync(CreateOrdenPagoDto dto, int idUsuario, CancellationToken cancellationToken = default);
+}
+
 public interface ICreateOrdenPagoUseCase
 {
     Task<ProveedorReciboDisplay> ExecuteAsync(CreateOrdenPagoDto dto, CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Alta de orden de pago en una transacción (Agregar_Ws de FrmOrdendePago): orden, imputación a comprobantes (cta. cte. + estados),
-/// cta. cte. de la orden, formas de pago (caja, cheques de terceros entregados, cheques propios, bancos, retenciones), detalle,
-/// movimientos y numeración. Espejo del recibo de cobro.
-/// </summary>
+/// <summary>Alta de orden de pago en una transacción, con el lock del proveedor (Agregar_Ws de FrmOrdendePago).</summary>
 public sealed class CreateOrdenPagoUseCase : ICreateOrdenPagoUseCase
+{
+    private readonly IOrdenPagoWriter _writer;
+    private readonly IReciboCobroRepository _comprobantes;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
+
+    public CreateOrdenPagoUseCase(IOrdenPagoWriter writer, IReciboCobroRepository comprobantes, IUnitOfWork unitOfWork, ICurrentUser currentUser)
+    {
+        _writer = writer;
+        _comprobantes = comprobantes;
+        _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
+    }
+
+    public async Task<ProveedorReciboDisplay> ExecuteAsync(CreateOrdenPagoDto dto, CancellationToken cancellationToken = default)
+    {
+        var idUsuario = CompraContexto.RequireIdUsuario(_currentUser);
+        var orden = await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            await _comprobantes.BloquearEntidadAsync(dto.IdProveedor!.Value, ct);
+            return await _writer.GrabarAsync(dto, idUsuario, ct);
+        }, cancellationToken);
+        return orden.ToDisplay();
+    }
+}
+
+/// <summary>
+/// Escritura de la orden de pago (Agregar_Ws de FrmOrdendePago y generarOrdenDePago de FrmCompras): orden, imputación a comprobantes
+/// (cta. cte. + estados), cta. cte. de la orden, formas de pago (caja, cheques de terceros entregados, cheques propios, bancos,
+/// retenciones), detalle, movimientos y numeración. Espejo del recibo de cobro.
+/// </summary>
+public sealed class OrdenPagoWriter : IOrdenPagoWriter
 {
     private const int IdEmpresa = 1;
     private const decimal Tolerancia = 0.01m;
@@ -102,25 +139,18 @@ public sealed class CreateOrdenPagoUseCase : ICreateOrdenPagoUseCase
     private readonly IOrdenPagoRepository _ordenes;
     private readonly IReciboCobroRepository _comprobantes;
     private readonly IReferenciasRepository _referencias;
-    private readonly IUnitOfWork _unitOfWork;
     private readonly IServerClock _clock;
-    private readonly ICurrentUser _currentUser;
 
-    public CreateOrdenPagoUseCase(
-        IOrdenPagoRepository ordenes, IReciboCobroRepository comprobantes, IReferenciasRepository referencias,
-        IUnitOfWork unitOfWork, IServerClock clock, ICurrentUser currentUser)
+    public OrdenPagoWriter(IOrdenPagoRepository ordenes, IReciboCobroRepository comprobantes, IReferenciasRepository referencias, IServerClock clock)
     {
         _ordenes = ordenes;
         _comprobantes = comprobantes;
         _referencias = referencias;
-        _unitOfWork = unitOfWork;
         _clock = clock;
-        _currentUser = currentUser;
     }
 
-    public async Task<ProveedorReciboDisplay> ExecuteAsync(CreateOrdenPagoDto dto, CancellationToken cancellationToken = default)
+    public async Task<Db.ProveedoresRecibos> GrabarAsync(CreateOrdenPagoDto dto, int idUsuario, CancellationToken ct = default)
     {
-        var idUsuario = CompraContexto.RequireIdUsuario(_currentUser);
         if (dto.Imputaciones.Count == 0 && dto.Elementos.Count == 0)
             throw new BusinessException("La orden de pago tiene que tener al menos un comprobante o una forma de pago.");
         var repetidos = dto.Imputaciones.GroupBy(i => (i.IdComprobante, i.IdComprobanteTipo)).Where(g => g.Count() > 1).Select(g => g.Key.IdComprobante).ToList();
@@ -128,139 +158,131 @@ public sealed class CreateOrdenPagoUseCase : ICreateOrdenPagoUseCase
             throw new BusinessException($"Comprobantes repetidos en la orden de pago: {string.Join(", ", repetidos)}.");
 
         var idProveedor = dto.IdProveedor!.Value;
+        var c = await CodigosOrdenPago.LoadAsync(_referencias, ct);
+        var proveedor = await _comprobantes.GetEntidadAsync(idProveedor, ct) ?? throw new NotFoundException($"Proveedor {idProveedor} no existe.");
+        var planilla = await VentaContexto.GetPlanillaAbiertaAsync(_comprobantes, _referencias, idUsuario, c.Op, OrdenPagoContexto.Letra, ct);
+        var imputaciones = await ValidarImputacionesAsync(dto, idProveedor, c, ct);
+        var (puntoVenta, numero) = await NumerarAsync(dto, planilla.PuntoVenta!, c.Op, ct);
+        var ahora = await _clock.GetNowAsync(ct);
+        var fecha = dto.FechaEmision!.Value;
+        var nroCompleto = $"{OrdenPagoContexto.Letra}-{puntoVenta}-{numero}";
 
-        var orden = await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        // El ERP tomaba los totales del navegador; acá salen de los elementos y de los comprobantes validados.
+        var totalOrden = ImputacionRules.Redondear(dto.Elementos.Sum(e => e.Importe));
+        var totalComprobantes = ImputacionRules.Redondear(dto.Imputaciones.Sum(i => i.ImporteComprobante));
+
+        var nueva = new Db.ProveedoresRecibos
         {
-            await _comprobantes.BloquearEntidadAsync(idProveedor, ct);
+            IdProveedor = idProveedor,
+            Letra = OrdenPagoContexto.Letra,
+            PuntoVenta = puntoVenta,
+            Numero = numero,
+            RazonSocial = VentaRules.Truncar(proveedor.RazonSocial, 50),
+            IdCategoriaIva = proveedor.IdCategoriaIva,
+            NroDoc = VentaRules.Truncar(proveedor.Cuit, 50),
+            FechaEmision = fecha,
+            IdUsuario = idUsuario,
+            IdEmpresa = IdEmpresa,
+            IdPlanillaCaja = planilla.IdPlanillaCaja,
+            Total = totalOrden,
+            Estado = await OrdenPagoContexto.EstadoAsync(_referencias, "ORDENESPAGO", "GENERADO", ct),
+            IdOrdenPagoTipo = await _referencias.GetIdCategoriaAsync("ORDENPAGOTIPO", "PROVEEDOR", ct),
+            Observaciones = dto.Observaciones ?? string.Empty,
+            IdSucursal = dto.IdSucursal,
+        };
+        _ordenes.Add(nueva);
+        await _ordenes.SaveChangesAsync(ct);
 
-            var c = await CodigosOrdenPago.LoadAsync(_referencias, ct);
-            var proveedor = await _comprobantes.GetEntidadAsync(idProveedor, ct) ?? throw new NotFoundException($"Proveedor {idProveedor} no existe.");
-            var planilla = await VentaContexto.GetPlanillaAbiertaAsync(_comprobantes, _referencias, idUsuario, c.Op, OrdenPagoContexto.Letra, ct);
-            var imputaciones = await ValidarImputacionesAsync(dto, idProveedor, c, ct);
-            var (puntoVenta, numero) = await NumerarAsync(dto, planilla.PuntoVenta!, c.Op, ct);
-            var ahora = await _clock.GetNowAsync(ct);
-            var fecha = dto.FechaEmision!.Value;
-            var nroCompleto = $"{OrdenPagoContexto.Letra}-{puntoVenta}-{numero}";
+        // Imputación en orden, consumiendo el importe de la orden.
+        var saldoOrden = totalOrden;
+        foreach (var (imputacion, tipo, concepto) in imputaciones)
+        {
+            var idComprobante = imputacion.IdComprobante!.Value;
+            var idTipo = imputacion.IdComprobanteTipo!.Value;
+            var r = OrdenPagoRules.Imputar(tipo, imputacion.ImporteComprobante, saldoOrden);
+            await _comprobantes.ImputarCtaCteAsync(idComprobante, idTipo, r.SaldoCtaCte, fecha, r.Cancelado, 0, ct);
 
-            // El ERP tomaba los totales del navegador; acá salen de los elementos y de los comprobantes validados.
-            var totalOrden = ImputacionRules.Redondear(dto.Elementos.Sum(e => e.Importe));
-            var totalComprobantes = ImputacionRules.Redondear(dto.Imputaciones.Sum(i => i.ImporteComprobante));
-
-            var nueva = new Db.ProveedoresRecibos
+            _ordenes.Add(new Db.EntidadOrdenPagoDocumentosProveedores
             {
-                IdProveedor = idProveedor,
-                Letra = OrdenPagoContexto.Letra,
-                PuntoVenta = puntoVenta,
-                Numero = numero,
-                RazonSocial = VentaRules.Truncar(proveedor.RazonSocial, 50),
-                IdCategoriaIva = proveedor.IdCategoriaIva,
-                NroDoc = VentaRules.Truncar(proveedor.Cuit, 50),
-                FechaEmision = fecha,
-                IdUsuario = idUsuario,
-                IdEmpresa = IdEmpresa,
-                IdPlanillaCaja = planilla.IdPlanillaCaja,
-                Total = totalOrden,
-                Estado = await OrdenPagoContexto.EstadoAsync(_referencias, "ORDENESPAGO", "GENERADO", ct),
-                IdOrdenPagoTipo = await _referencias.GetIdCategoriaAsync("ORDENPAGOTIPO", "PROVEEDOR", ct),
-                Observaciones = dto.Observaciones ?? string.Empty,
-                IdSucursal = dto.IdSucursal,
-            };
-            _ordenes.Add(nueva);
-            await _ordenes.SaveChangesAsync(ct);
-
-            // Imputación en orden, consumiendo el importe de la orden.
-            var saldoOrden = totalOrden;
-            foreach (var (imputacion, tipo, concepto) in imputaciones)
-            {
-                var idComprobante = imputacion.IdComprobante!.Value;
-                var idTipo = imputacion.IdComprobanteTipo!.Value;
-                var r = OrdenPagoRules.Imputar(tipo, imputacion.ImporteComprobante, saldoOrden);
-                await _comprobantes.ImputarCtaCteAsync(idComprobante, idTipo, r.SaldoCtaCte, fecha, r.Cancelado, 0, ct);
-
-                _ordenes.Add(new Db.EntidadOrdenPagoDocumentosProveedores
-                {
-                    IdEntidadOrdenPago = nueva.IdProveedorRecibo,
-                    IdEntidad = idProveedor,
-                    NumeroOrdenPago = nroCompleto,
-                    ImporteOrdenPago = r.ImporteImputado,
-                    IdDocumentoProveedor = idComprobante,
-                    IdComprobanteTipo = idTipo,
-                    NumeroComprobante = concepto,
-                    ImporteComprobante = imputacion.ImporteComprobante,
-                    Saldo = r.SaldoComprobante,
-                });
-
-                await ActualizarEstadoImputadoAsync(tipo, idComprobante, r.Parcial, ct);
-                saldoOrden = r.SaldoReciboRestante;
-            }
-
-            // Cta. cte. de la orden: lo pagado de más queda como saldo (negativo) a favor de la empresa.
-            var (saldoCtaCte, cancelado) = ImputacionRules.SaldoRecibo(totalComprobantes, totalOrden);
-            var ctaCte = new Db.EntidadesCtaCte
-            {
+                IdEntidadOrdenPago = nueva.IdProveedorRecibo,
                 IdEntidad = idProveedor,
+                NumeroOrdenPago = nroCompleto,
+                ImporteOrdenPago = r.ImporteImputado,
+                IdDocumentoProveedor = idComprobante,
+                IdComprobanteTipo = idTipo,
+                NumeroComprobante = concepto,
+                ImporteComprobante = imputacion.ImporteComprobante,
+                Saldo = r.SaldoComprobante,
+            });
+
+            await ActualizarEstadoImputadoAsync(tipo, idComprobante, r.Parcial, ct);
+            saldoOrden = r.SaldoReciboRestante;
+        }
+
+        // Cta. cte. de la orden: lo pagado de más queda como saldo (negativo) a favor de la empresa.
+        var (saldoCtaCte, cancelado) = ImputacionRules.SaldoRecibo(totalComprobantes, totalOrden);
+        var ctaCte = new Db.EntidadesCtaCte
+        {
+            IdEntidad = idProveedor,
+            IdComprobanteTipo = c.Op,
+            IdComprobante = nueva.IdProveedorRecibo,
+            Concepto = $"OP-{nroCompleto}",
+            NroCuota = 1,
+            Total = totalOrden,
+            Saldo = saldoCtaCte,
+            Cancelado = cancelado,
+            Fecha = ahora,
+            FechaVencimiento = fecha,
+            FechaAnulacion = fecha,
+            FechaPago = fecha,
+            InteresAplicado = 0,
+            Estado = await _referencias.IdAsync(EstadosCobranza.CtaCteGenerado, ct),
+            Total2 = totalOrden,
+            IdEmpresa = IdEmpresa,
+            IdSucursal = dto.IdSucursal,
+            IdUsuario = idUsuario,
+        };
+        _ordenes.Add(ctaCte);
+        await _ordenes.SaveChangesAsync(ct);
+
+        foreach (var e in dto.Elementos)
+        {
+            var idElemento = await RegistrarElementoAsync(e, c, nueva, planilla.IdPlanillaCaja, nroCompleto, fecha, ahora, idUsuario, ct);
+
+            _ordenes.Add(new Db.ProveedoresRecibosDetalle
+            {
+                IdProveedorRecibo = nueva.IdProveedorRecibo,
+                IdElementoCobroPago = e.IdElementoCobro,
+                Descripcion = e.Descripcion ?? string.Empty,
+                Detalle = e.Descripcion ?? string.Empty,
+                IdBanco = e.IdBancoOrigen,
+                IdSucursal = e.IdSucursalOrigen,
+                Banco = e.Banco ?? string.Empty,
+                Sucursal = e.Sucursal ?? string.Empty,
+                Recepcion = e.FechaRecepcion ?? fecha,
+                Emision = e.FechaEmision ?? fecha,
+                Vto = e.FechaVencimiento ?? fecha,
+                Nro = e.Numero ?? string.Empty,
+                IdElemento = idElemento,
+                Total = e.Importe,
+            });
+
+            _ordenes.Add(new Db.EntidadesCtaCteMovimientos
+            {
+                IdEntidadCtaCte = ctaCte.IdEntidadCtaCte,
+                Concepto = $"OP -{nroCompleto}",
+                AfavorEntidad = e.Importe,
+                EnContraEntidad = 0,
+                Fecha = ahora,
+                IdElementoCobroPago = e.IdElementoCobro,
+                IdElemento = idElemento,
                 IdComprobanteTipo = c.Op,
                 IdComprobante = nueva.IdProveedorRecibo,
-                Concepto = $"OP-{nroCompleto}",
-                NroCuota = 1,
-                Total = totalOrden,
-                Saldo = saldoCtaCte,
-                Cancelado = cancelado,
-                Fecha = ahora,
-                FechaVencimiento = fecha,
-                FechaAnulacion = fecha,
-                FechaPago = fecha,
-                InteresAplicado = 0,
-                Estado = await _referencias.IdAsync(EstadosCobranza.CtaCteGenerado, ct),
-                Total2 = totalOrden,
-                IdEmpresa = IdEmpresa,
-                IdSucursal = dto.IdSucursal,
-                IdUsuario = idUsuario,
-            };
-            _ordenes.Add(ctaCte);
-            await _ordenes.SaveChangesAsync(ct);
+            });
+        }
 
-            foreach (var e in dto.Elementos)
-            {
-                var idElemento = await RegistrarElementoAsync(e, c, nueva, planilla.IdPlanillaCaja, nroCompleto, fecha, ahora, idUsuario, ct);
-
-                _ordenes.Add(new Db.ProveedoresRecibosDetalle
-                {
-                    IdProveedorRecibo = nueva.IdProveedorRecibo,
-                    IdElementoCobroPago = e.IdElementoCobro,
-                    Descripcion = e.Descripcion ?? string.Empty,
-                    Detalle = e.Descripcion ?? string.Empty,
-                    IdBanco = e.IdBancoOrigen,
-                    IdSucursal = e.IdSucursalOrigen,
-                    Banco = e.Banco ?? string.Empty,
-                    Sucursal = e.Sucursal ?? string.Empty,
-                    Recepcion = e.FechaRecepcion ?? fecha,
-                    Emision = e.FechaEmision ?? fecha,
-                    Vto = e.FechaVencimiento ?? fecha,
-                    Nro = e.Numero ?? string.Empty,
-                    IdElemento = idElemento,
-                    Total = e.Importe,
-                });
-
-                _ordenes.Add(new Db.EntidadesCtaCteMovimientos
-                {
-                    IdEntidadCtaCte = ctaCte.IdEntidadCtaCte,
-                    Concepto = $"OP -{nroCompleto}",
-                    AfavorEntidad = e.Importe,
-                    EnContraEntidad = 0,
-                    Fecha = ahora,
-                    IdElementoCobroPago = e.IdElementoCobro,
-                    IdElemento = idElemento,
-                    IdComprobanteTipo = c.Op,
-                    IdComprobante = nueva.IdProveedorRecibo,
-                });
-            }
-
-            await _ordenes.SaveChangesAsync(ct);
-            return nueva;
-        }, cancellationToken);
-
-        return orden.ToDisplay();
+        await _ordenes.SaveChangesAsync(ct);
+        return nueva;
     }
 
     /// <summary>Cada comprobante tiene que ser del proveedor, estar pendiente y el importe tiene que ser su saldo (el ERP confiaba en el navegador).</summary>

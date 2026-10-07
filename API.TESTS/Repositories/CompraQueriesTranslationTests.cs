@@ -61,8 +61,10 @@ public class CompraQueriesTranslationTests
         await _repo.ModificarCabeceraAsync(410, new API.SERVICE.Interfaces.Compras.CabeceraProveedorRow(5, "PROV", 2, "30", 1, 2, "CALLE", 100, 21, 0, 121));
         await _repo.BorrarDetallesAsync(410);
         await _repo.AnularDetallesAsync(410, 99);
+        await _repo.ActualizarCostoItemAsync(10, 100);
 
-        _interceptor.Commands.Should().HaveCount(11);
+        _interceptor.Commands.Should().HaveCount(12);
+        LastSql.Should().StartWith("UPDATE").And.Contain("[Items]").And.Contain("[Neto] = @");
         _interceptor.Commands.ElementAt(8).Should().StartWith("UPDATE").And.Contain("[TotalGeneral] = @").And.NotContain("[Numero]");
         _interceptor.Commands.ElementAt(9).Should().StartWith("DELETE").And.Contain("[DocumentosProveedorDetalle]");
         _interceptor.Commands.ElementAt(10).Should().StartWith("UPDATE").And.Contain("[DocumentosProveedorDetalle]").And.Contain("[EstadoLibroIVA] = @");

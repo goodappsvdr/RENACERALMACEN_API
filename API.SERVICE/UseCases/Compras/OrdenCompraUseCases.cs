@@ -70,17 +70,9 @@ public sealed class IniciarOrdenCompraUseCase : IIniciarOrdenCompraUseCase
         _currentUser = currentUser;
     }
 
-    public async Task<NuevaVentaInternaDisplay> ExecuteAsync(CancellationToken cancellationToken = default)
-    {
-        var idUsuario = CompraContexto.RequireIdUsuario(_currentUser);
-        var oc = await _referencias.GetParametroEnteroAsync("COMPROBANTE", "OC", cancellationToken);
-        var planilla = await VentaContexto.GetPlanillaAbiertaAsync(_comprobantes, _referencias, idUsuario, oc, OrdenCompraContexto.Letra, cancellationToken);
-        var manual = await VentaContexto.NumeracionManualAsync(_referencias, cancellationToken, "OC");
-        string? sugerido = null;
-        if (!manual)
-            sugerido = (await _comprobantes.GetProximoNumeroAsync(planilla.PuntoVenta!, OrdenCompraContexto.Letra, oc, cancellationToken))?.ToString().PadLeft(8, '0');
-        return new NuevaVentaInternaDisplay(planilla.IdPlanillaCaja, planilla.PuntoVenta!, OrdenCompraContexto.Letra, manual, sugerido);
-    }
+    public async Task<NuevaVentaInternaDisplay> ExecuteAsync(CancellationToken cancellationToken = default) =>
+        await NumeracionCompra.IniciarAsync(_comprobantes, _referencias, CompraContexto.RequireIdUsuario(_currentUser), "OC",
+            await _referencias.GetParametroEnteroAsync("COMPROBANTE", "OC", cancellationToken), cancellationToken);
 }
 
 public interface ICreateOrdenCompraUseCase
@@ -132,7 +124,9 @@ public sealed class CreateOrdenCompraUseCase : ICreateOrdenCompraUseCase
             var proveedor = await _comprobantes.GetEntidadAsync(idProveedor, ct) ?? throw new NotFoundException($"Proveedor {idProveedor} no existe.");
             var sucursal = await _stock.GetSucursalAsync(dto.IdSucursal!.Value, ct) ?? throw new NotFoundException($"Sucursal {dto.IdSucursal} no existe.");
             var planilla = await VentaContexto.GetPlanillaAbiertaAsync(_comprobantes, _referencias, idUsuario, oc, OrdenCompraContexto.Letra, ct);
-            var (puntoVenta, numero) = await NumerarAsync(dto, planilla.PuntoVenta!, oc, ct);
+            // El ERP consultaba NUMERACION/PV (la de presupuestos) para decidir si la numeración de la OC era manual.
+            var (puntoVenta, numero) = await NumeracionCompra.ReservarAsync(
+                _comprobantes, _referencias, "OC", oc, planilla.PuntoVenta!, dto.PuntoVenta, dto.Numero, "órdenes de compra", ct);
 
             var preparado = new ComprobanteCompraPreparado(
                 proveedor, sucursal, dto.IdCategoriaIva ?? proveedor.IdCategoriaIva ?? 1, OrdenCompraContexto.Letra, puntoVenta, numero, planilla.IdPlanillaCaja, false);
@@ -147,22 +141,6 @@ public sealed class CreateOrdenCompraUseCase : ICreateOrdenCompraUseCase
         }, cancellationToken);
 
         return orden.ToDisplay();
-    }
-
-    private async Task<(string PuntoVenta, string Numero)> NumerarAsync(CreateOrdenCompraDto dto, string puntoVentaPlanilla, int oc, CancellationToken ct)
-    {
-        // El ERP consultaba NUMERACION/PV (la de presupuestos) para decidir si la numeración de la OC era manual.
-        if (await VentaContexto.NumeracionManualAsync(_referencias, ct, "OC"))
-        {
-            if (string.IsNullOrWhiteSpace(dto.PuntoVenta) || string.IsNullOrWhiteSpace(dto.Numero))
-                throw new BusinessException("La numeración de órdenes de compra es manual (NUMERACION/OC = 1): informar punto de venta y número.");
-            await _comprobantes.ReservarNumeroAsync(dto.PuntoVenta, OrdenCompraContexto.Letra, oc, ct);
-            return (dto.PuntoVenta.PadLeft(4, '0'), dto.Numero.PadLeft(8, '0'));
-        }
-
-        var numero = await _comprobantes.ReservarNumeroAsync(puntoVentaPlanilla, OrdenCompraContexto.Letra, oc, ct)
-            ?? throw new BusinessException($"No existe el punto de venta {puntoVentaPlanilla} para órdenes de compra (letra {OrdenCompraContexto.Letra}).");
-        return (puntoVentaPlanilla, numero.ToString().PadLeft(8, '0'));
     }
 }
 

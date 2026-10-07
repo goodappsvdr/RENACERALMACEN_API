@@ -139,6 +139,9 @@ public sealed class CompraRepository : ICompraRepository
             .OrderBy(c => c.IdEntidadCtaCte)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public Task ActualizarCostoItemAsync(int idItem, decimal costo, CancellationToken cancellationToken = default) =>
+        _context.Items.Where(i => i.IdItem == idItem).ExecuteUpdateAsync(s => s.SetProperty(i => i.Neto, costo), cancellationToken);
+
     public void Add<TEntity>(TEntity entity) where TEntity : class => _context.Set<TEntity>().Add(entity);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _context.SaveChangesAsync(cancellationToken);

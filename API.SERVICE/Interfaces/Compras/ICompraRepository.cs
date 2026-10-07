@@ -68,6 +68,9 @@ public interface ICompraRepository
     /// <summary>Cta. cte. del comprobante (EntidadesCtaCte_BuscarPorID_ComprobanteTipoID_Comprobante).</summary>
     Task<Db.EntidadesCtaCte?> GetCtaCteAsync(int idComprobanteTipo, int idComprobante, CancellationToken cancellationToken = default);
 
+    /// <summary>Items_ActualizarPrecio: el costo del ítem (Items.Neto) con el precio de la compra (parámetro CAMBIAPRECIO).</summary>
+    Task ActualizarCostoItemAsync(int idItem, decimal costo, CancellationToken cancellationToken = default);
+
     void Add<TEntity>(TEntity entity) where TEntity : class;
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);

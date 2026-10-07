@@ -4,7 +4,7 @@ using API.SERVICE.Interfaces.Compras;
 namespace API.TESTS.Infrastructure;
 
 /// <summary>Repositorio de compras en memoria. Las altas de stock / cta. cte. quedan en <see cref="Added"/>, las actualizaciones en <see cref="Operaciones"/>.</summary>
-public sealed class FakeCompraRepository : ICompraRepository
+public sealed class FakeCompraRepository(FakeReciboCobroRepository? recibos = null) : ICompraRepository
 {
     private int _nextId = 700;
 
@@ -56,6 +56,9 @@ public sealed class FakeCompraRepository : ICompraRepository
         Op($"EstadoPendiente {idDocumentoProveedor}={estado} pendiente={pendiente}");
 
     public HashSet<int> ConRelacionesComoOrigen { get; } = [];
+
+    public Task ActualizarCostoItemAsync(int idItem, decimal costo, CancellationToken cancellationToken = default) =>
+        Op($"ActualizarCosto {idItem}={costo:0.00}");
 
     public Task ModificarCabeceraAsync(int idDocumentoProveedor, CabeceraProveedorRow datos, CancellationToken cancellationToken = default)
     {
@@ -115,6 +118,7 @@ public sealed class FakeCompraRepository : ICompraRepository
                     break;
                 case EntidadesCtaCte c when c.IdEntidadCtaCte == 0:
                     c.IdEntidadCtaCte = _nextId++;
+                    recibos?.CtaCte.Add(c); // misma tabla que lee la orden de pago
                     break;
             }
         }
